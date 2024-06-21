@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "BitBetMatic": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7095",
+      "launchBrowser": false
+    }
+  }
+}

@@ -22,11 +22,19 @@ namespace BitBetMatic
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
 
-            var client = new RestClient("https://api.bitvavo.com/v2");
+            return await new BitBetMaticProcessor().Process();
+        }
+    }
+
+    public class BitBetMaticProcessor
+    {
+        public async Task<IActionResult> Process()
+        {
+            var api = new BitvavoApi();
 
             // Run in parallel to improve performance
-            var btcTask = ProcessForToken(client, "BTC-EUR", "BTC");
-            var ethTask = ProcessForToken(client, "ETH-EUR", "ETH");
+            var btcTask = ProcessForToken(api, "BTC-EUR", "BTC");
+            var ethTask = ProcessForToken(api, "ETH-EUR", "ETH");
             await Task.WhenAll(btcTask, ethTask);
 
             var decisionBtc = btcTask.Result;
@@ -35,10 +43,10 @@ namespace BitBetMatic
             return new OkObjectResult($"{decisionBtc.text}\n{decisionEth.text}");
         }
 
-        private static async Task<(string text, Decisions decisions)> ProcessForToken(RestClient client, string pair, string symbol)
+        private async Task<(string text, Decisions decisions)> ProcessForToken(BitvavoApi api, string pair, string symbol)
         {
-            var price = await GetPrice(client, pair);
-            var quotes = await GetCandleData(client, pair);
+            var price = await api.GetPrice(pair);
+            var quotes = await api.GetCandleData(pair);
 
             var indicators = CalculateIndicators(quotes);
             var decision = MakeDecision(price, indicators);
@@ -47,7 +55,7 @@ namespace BitBetMatic
             return (text, decision);
         }
 
-        private static string DecisionToText(string symbol, decimal tokenPrice, Indicators indicators, Decisions decisions)
+        private string DecisionToText(string symbol, decimal tokenPrice, Indicators indicators, Decisions decisions)
         {
             var outcome = decisions.Outcome().First().Outcome;
             var outcomeText = outcome switch
@@ -69,73 +77,25 @@ namespace BitBetMatic
                    $"Bollinger Bands - Upper: {indicators.Bollinger.UpperBand}, Lower: {indicators.Bollinger.LowerBand}\n";
         }
 
-        private static async Task<decimal> GetPrice(RestClient client, string market)
-        {
-            try
-            {
-                var request = new RestRequest($"ticker/price?market={market}", Method.Get);
-                var response = await client.ExecuteAsync(request);
-                var price = JsonConvert.DeserializeObject<dynamic>(response.Content).price;
-                return (decimal)price;
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Error getting price for {market}: {ex.Message}");
-            }
-        }
-
-        private static async Task<List<Quote>> GetCandleData(RestClient client, string market)
-        {
-            try
-            {
-                var request = new RestRequest($"{market}/candles", Method.Get);
-                request.AddParameter("interval", "1h");
-                request.AddParameter("limit", "100");
-                var response = await client.ExecuteAsync(request);
-                var candles = JsonConvert.DeserializeObject<dynamic>(response.Content);
-                
-            List<Quote> quotes = new List<Quote>();
-
-            foreach (var candle in candles)
-            {
-                quotes.Add(new Quote
-                {
-                    Date = DateTimeOffset.FromUnixTimeMilliseconds((long)candle[0]).UtcDateTime,
-                    Open = (decimal)candle[1],
-                    High = (decimal)candle[2],
-                    Low = (decimal)candle[3],
-                    Close = (decimal)candle[4],
-                    Volume = (decimal)candle[5]
-                });
-            }
-
-            return quotes;
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Error getting candle data for {market}: {ex.Message}");
-            }
-        }
-
-        private static decimal CalculateRsi(List<Quote> quotes)
+        private decimal CalculateRsi(List<Quote> quotes)
         {
             var rsiResults = quotes.GetRsi(14).ToList();
             return ToDecimal(rsiResults.LastOrDefault()?.Rsi);
         }
 
-        private static decimal CalculateMeanReversion(List<Quote> quotes)
+        private decimal CalculateMeanReversion(List<Quote> quotes)
         {
             var smaResults = quotes.GetSma(20).ToList();
             return ToDecimal(smaResults.LastOrDefault()?.Sma);
         }
 
-        private static decimal CalculateMomentum(List<Quote> quotes)
+        private decimal CalculateMomentum(List<Quote> quotes)
         {
             var momResults = quotes.GetMacd(10).ToList();
             return ToDecimal(momResults.LastOrDefault()?.Macd);
         }
 
-        private static Macd CalculateMacd(List<Quote> quotes)
+        private Macd CalculateMacd(List<Quote> quotes)
         {
             var macdResults = quotes.GetMacd(12, 26, 9).ToList();
             var latestMacd = macdResults.Last();
@@ -147,7 +107,7 @@ namespace BitBetMatic
             };
         }
 
-        private static BollingerBand CalculateBollingerBands(List<Quote> quotes)
+        private BollingerBand CalculateBollingerBands(List<Quote> quotes)
         {
             var bollingerResults = quotes.GetBollingerBands(20, 2).ToList();
             var latestBollinger = bollingerResults.Last();
@@ -158,9 +118,9 @@ namespace BitBetMatic
             };
         }
 
-        private static decimal ToDecimal(double? doubleVal) => doubleVal.HasValue ? Convert.ToDecimal(doubleVal.Value) : 0;
+        private decimal ToDecimal(double? doubleVal) => doubleVal.HasValue ? Convert.ToDecimal(doubleVal.Value) : 0;
 
-        private static Decisions MakeDecision(decimal tokenPrice, Indicators indicators)
+        private Decisions MakeDecision(decimal tokenPrice, Indicators indicators)
         {
             var decisions = new Decisions();
 
@@ -231,7 +191,7 @@ namespace BitBetMatic
             return decisions;
         }
 
-        private static Indicators CalculateIndicators(List<Quote> quotes)
+        private Indicators CalculateIndicators(List<Quote> quotes)
         {
             return new Indicators
             {
@@ -242,7 +202,67 @@ namespace BitBetMatic
                 Bollinger = CalculateBollingerBands(quotes)
             };
         }
+    }
 
+    public interface IApiWrapper
+    {
+
+    }
+    public class BitvavoApi : IApiWrapper
+    {
+
+        private readonly RestClient Client;
+        public BitvavoApi()
+        {
+            Client = new RestClient("https://api.bitvavo.com/v2");
+        }
+        public async Task<decimal> GetPrice(string market)
+        {
+            try
+            {
+                var request = new RestRequest($"ticker/price?market={market}", Method.Get);
+                var response = await Client.ExecuteAsync(request);
+                var price = JsonConvert.DeserializeObject<dynamic>(response.Content).price;
+                return (decimal)price;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error getting price for {market}: {ex.Message}");
+            }
+        }
+
+        public async Task<List<Quote>> GetCandleData(string market)
+        {
+            try
+            {
+                var request = new RestRequest($"{market}/candles", Method.Get);
+                request.AddParameter("interval", "1h");
+                request.AddParameter("limit", "100");
+                var response = await Client.ExecuteAsync(request);
+                var candles = JsonConvert.DeserializeObject<dynamic>(response.Content);
+
+                List<Quote> quotes = new List<Quote>();
+
+                foreach (var candle in candles)
+                {
+                    quotes.Add(new Quote
+                    {
+                        Date = DateTimeOffset.FromUnixTimeMilliseconds((long)candle[0]).UtcDateTime,
+                        Open = (decimal)candle[1],
+                        High = (decimal)candle[2],
+                        Low = (decimal)candle[3],
+                        Close = (decimal)candle[4],
+                        Volume = (decimal)candle[5]
+                    });
+                }
+
+                return quotes;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error getting candle data for {market}: {ex.Message}");
+            }
+        }
     }
 
     public class BollingerBand

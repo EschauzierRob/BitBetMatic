@@ -24,19 +24,59 @@ namespace BitBetMatic
             log.LogInformation("C# HTTP trigger function processed a request.");
 
             var client = new RestClient("https://api.bitvavo.com/v2");
-            var btcPrice = await GetPrice(client, "BTC-EUR");
-            var ethPrice = await GetPrice(client, "ETH-EUR");
 
-            var btcQuotes = await GetCandleData(client, "BTC-EUR");
-            var ethQuotes = await GetCandleData(client, "ETH-EUR");
+            var decisionBtc = await ProcessForToken(client, "BTC-EUR", "BTC");
+            var decisionEth = await ProcessForToken(client, "ETH-EUR", "ETH");
 
-            var btcRsi = CalculateRsi(btcQuotes);
-            var ethRsi = CalculateRsi(ethQuotes);
+            return new OkObjectResult($"{decisionBtc.Item1}\n{decisionEth.Item1}");
+        }
 
-            string decisionBtc = MakeDecision(btcPrice, btcQuotes, "BTC");
-            string decisionEth = MakeDecision(ethPrice, ethQuotes, "ETH");
+        private static async Task<(string, Decisions)> ProcessForToken(RestClient client, string pair, string symbol)
+        {
 
-            return new OkObjectResult($"{decisionBtc}\n{decisionEth}");
+            var price = await GetPrice(client, pair);
+            var quotes = await GetCandleData(client, pair);
+
+            Indicators indicators = CaculateIndicators(quotes);
+
+            var decision = MakeDecision(price, indicators);
+
+            var text = DecisionToText(symbol, price, indicators, decision);
+
+            return (text, decision);
+        }
+
+        private static string DecisionToText(string symbol, decimal tokenPrice, Indicators indicators, Decisions decisions)
+        {
+            var outcome = decisions.Outcome();
+            string decision = "";
+            string outcomeText = "";
+
+            if (outcome.First().Outcome == BuySellHold.Buy)
+            {
+                outcomeText = "Buy";
+            }
+            else if (outcome.First().Outcome == BuySellHold.Sell)
+            {
+                outcomeText = "Sell";
+            }
+            else
+            {
+                outcomeText = "Hold";
+            }
+
+            var arguments = string.Join(Environment.NewLine, outcome.Select(x => $" - {x.Text}").ToArray()); ;
+
+            decision = $"{outcomeText} {symbol}\n{arguments}";
+
+            return $"{decision}\n" +
+
+                                      $"Price: {tokenPrice}\n" +
+                                      $"RSI: {indicators.Rsi}\n" +
+                                      $"Mean Reversion: {indicators.MeanReversion}\n" +
+                                      $"Momentum: {indicators.Momentum}\n" +
+                                      $"MACD: {indicators.Macd.MacdValue}, Signal: {indicators.Macd.Signal}, Histogram: {indicators.Macd.Histogram}\n" +
+                                      $"Bollinger Bands - Upper: {indicators.Bollinger.UpperBand}, Lower: {indicators.Bollinger.LowerBand}\n";
         }
 
         private static async Task<decimal> GetPrice(RestClient client, string market)
@@ -77,7 +117,7 @@ namespace BitBetMatic
             var rsiResults = quotes.GetRsi(14).ToList();
             var latestRsi = rsiResults.Last().Rsi;
 
-            return latestRsi.HasValue ? Convert.ToDecimal(latestRsi.Value) : 0;
+            return ToDecimal(latestRsi);
         }
 
         private static decimal CalculateMeanReversion(List<Quote> quotes)
@@ -85,115 +125,202 @@ namespace BitBetMatic
             var smaResults = quotes.GetSma(20).ToList();
             var latestSma = smaResults.Last().Sma;
 
-            return latestSma.HasValue ? Convert.ToDecimal(latestSma.Value) : 0;
+            return ToDecimal(latestSma);
         }
 
         private static decimal CalculateMomentum(List<Quote> quotes)
         {
+            var momResults = quotes.GetMacd(10).ToList();
+            var latestMom = momResults.Last().Macd;
+
+            return ToDecimal(latestMom);
+        }
+
+        private static Macd CalculateMacd(List<Quote> quotes)
+        {
             var macdResults = quotes.GetMacd(12, 26, 9).ToList();
             var latestMacd = macdResults.Last();
-
-            return latestMacd.Macd.HasValue ? Convert.ToDecimal(latestMacd.Macd.Value) : 0;
+            return new Macd { MacdValue = ToDecimal(latestMacd.Macd), Signal = ToDecimal(latestMacd.Signal), Histogram = ToDecimal(latestMacd.Histogram) };
         }
 
-        private static (decimal Macd, decimal Signal, decimal Histogram) CalculateMacd(List<Quote> quotes)
+        private static BollingerBand CalculateBollingerBands(List<Quote> quotes)
         {
-            var macd = quotes.GetMacd(12, 26, 9);
-            var lastMacd = macd.Last();
-            return (ToDecimal(lastMacd.Macd), ToDecimal(lastMacd.Signal), ToDecimal(lastMacd.Histogram));
+            var bollingerResults = quotes.GetBollingerBands(20, 2).ToList();
+            var latestBollinger = bollingerResults.Last();
+            return new BollingerBand { UpperBand = ToDecimal(latestBollinger.UpperBand), LowerBand = ToDecimal(latestBollinger.LowerBand) };
         }
 
-        private static (decimal UpperBand, decimal LowerBand) CalculateBollingerBands(List<Quote> quotes)
+        private static decimal ToDecimal(double? doubleVal)
         {
-            var bollinger = quotes.GetBollingerBands(20, 2);
-            var lastBollinger = bollinger.Last();
-            return (ToDecimal(lastBollinger.UpperBand), ToDecimal(lastBollinger.LowerBand));
-        }
-
-        private static decimal ToDecimal(double? doubleVal){
             return doubleVal.HasValue ? Convert.ToDecimal(doubleVal.Value) : 0;
         }
 
-        private static string MakeDecision(decimal tokenPrice, List<Quote> quotes, string symbol)
+        private static Decisions MakeDecision(decimal tokenPrice, Indicators indicators)
         {
-            var rsi = CalculateRsi(quotes);
 
-            var meanReversion = CalculateMeanReversion(quotes);
+            Decisions decisions = new Decisions();
 
-            var momentum = CalculateMomentum(quotes);
+            // Decision logic for the token
+            if (indicators.Rsi < 30 && indicators.Momentum > 0)
+            {
+                decisions[Decisions.RsiAndMomentum].Outcome = BuySellHold.Buy;
+                decisions[Decisions.RsiAndMomentum].Text = "RSI < 30 and positive momentum";
+            }
+            else if (indicators.Rsi > 70 && indicators.Momentum < 0)
+            {
+                decisions[Decisions.RsiAndMomentum].Outcome = BuySellHold.Sell;
+                decisions[Decisions.RsiAndMomentum].Text = "RSI < 70 and negative momentum";
+            }
+            else
+            {
+                decisions[Decisions.RsiAndMomentum].Outcome = BuySellHold.Hold;
+                decisions[Decisions.RsiAndMomentum].Text = $"RSI({indicators.Rsi}) and momentum({indicators.Momentum}) ";
+            }
 
-            var macd = CalculateMacd(quotes);
+            if (tokenPrice < indicators.MeanReversion && indicators.Momentum > 0)
+            {
+                decisions[Decisions.MeanReversionAndMomentum].Outcome = BuySellHold.Buy;
+                decisions[Decisions.MeanReversionAndMomentum].Text = "Below mean reversion with positive momentum";
+            }
+            else if (tokenPrice > indicators.MeanReversion && indicators.Momentum < 0)
+            {
+                decisions[Decisions.MeanReversionAndMomentum].Outcome = BuySellHold.Sell;
+                decisions[Decisions.MeanReversionAndMomentum].Text = "Above mean reversion with negative momentum";
+            }
+            else
+            {
+                decisions[Decisions.MeanReversionAndMomentum].Outcome = BuySellHold.Hold;
+                decisions[Decisions.MeanReversionAndMomentum].Text = $"MeanReversion({indicators.MeanReversion}) and momentum({indicators.Momentum}) ";
+            }
 
-            var bollinger = CalculateBollingerBands(quotes);
+            if (indicators.Macd.MacdValue > indicators.Macd.Signal)
+            {
+                decisions[Decisions.Macd].Outcome = BuySellHold.Buy;
+                decisions[Decisions.Macd].Text = "MACD > Signal";
+            }
+            else if (indicators.Macd.MacdValue < indicators.Macd.Signal)
+            {
+                decisions[Decisions.Macd].Outcome = BuySellHold.Sell;
+                decisions[Decisions.Macd].Text = "MACD < Signal";
+            }
+            else
+            {
+                decisions[Decisions.Macd].Outcome = BuySellHold.Hold;
+                decisions[Decisions.Macd].Text = $"MacdValue({indicators.Macd.MacdValue}) and Signal({indicators.Macd.Signal}) ";
+            }
 
-            string Decision = MakeSingleDecision(quotes, tokenPrice, rsi, meanReversion, momentum, symbol, macd, bollinger);
+            if (tokenPrice < indicators.Bollinger.LowerBand)
+            {
+                decisions[Decisions.Bollinger].Outcome = BuySellHold.Buy;
+                decisions[Decisions.Bollinger].Text = "Below Bollinger Lower Band";
+            }
+            else if (tokenPrice > indicators.Bollinger.UpperBand)
+            {
+                decisions[Decisions.Bollinger].Outcome = BuySellHold.Sell;
+                decisions[Decisions.Bollinger].Text = "Above Bollinger Upper Band";
+            }
+            else
+            {
+                decisions[Decisions.Bollinger].Outcome = BuySellHold.Hold;
+                decisions[Decisions.Bollinger].Text = $"tokenPrice({tokenPrice}) and Bollinger.LowerBand({indicators.Bollinger.LowerBand}) ";
+            }
 
-            return $"{Decision}";
+            return decisions;
         }
 
-        private static string MakeSingleDecision(
-            List<Quote> quotes, decimal price, decimal rsi, decimal meanReversion, decimal momentum, string symbol, (decimal Macd, decimal Signal, decimal Histogram) macd, (decimal UpperBand, decimal LowerBand) bollinger)
+        private static Indicators CaculateIndicators(List<Quote> quotes)
         {
-            StringBuilder buyArguments = new StringBuilder();
-            StringBuilder sellArguments = new StringBuilder();
-            string decision;
-
-            // Decision logic for Token
-            if (rsi < 30 && momentum > 0)
+            return new Indicators
             {
-                buyArguments.AppendLine($"- (Oversold with positive momentum).");
-            }
-            else if (rsi > 70 && momentum < 0)
-            {
-                sellArguments.AppendLine($"- (Overbought with negative momentum). ");
-            }
-            
-            if (price < meanReversion && momentum > 0)
-            {
-                buyArguments.AppendLine($"- (Below mean with positive momentum). ");
-            }
-            else if (price > meanReversion && momentum < 0)
-            {
-                sellArguments.AppendLine($"- (Above mean with negative momentum). ");
-            }
-            
-            if (macd.Macd > macd.Signal)
-            {
-                buyArguments.AppendLine($"- (MACD positive). ");
-            }
-            else if (macd.Macd < macd.Signal)
-            {
-                sellArguments.AppendLine($"- (MACD negative). ");
-            }
-            
-            if (price < bollinger.LowerBand)
-            {
-                buyArguments.AppendLine($"- (Below Bollinger Lower Band). ");
-            }
-            else if (price > bollinger.UpperBand)
-            {
-                sellArguments.AppendLine($"- (Above Bollinger Upper Band). ");
-            }
-
-            if(buyArguments.Length>sellArguments.Length) {
-                decision =$"Buy {symbol}\n"+
-                buyArguments;
-            }
-            else if(buyArguments.Length<sellArguments.Length) {
-                decision =$"Sell {symbol}\n"+
-                sellArguments;
-            }
-            else {
-                decision =$"Hold {symbol}. ";
-            }
-
-            return $"Decision: {decision}\n\n" +
-                                      $"BTC Price: {quotes.Last().Close}\n" +
-                                      $"BTC RSI: {rsi}\n" +
-                                      $"BTC Mean Reversion: {meanReversion}\n" +
-                                      $"BTC Momentum: {momentum}\n" +
-                                      $"BTC MACD: {macd.Macd}, Signal: {macd.Signal}, Histogram: {macd.Histogram}\n" +
-                                      $"BTC Bollinger Bands - Upper: {bollinger.UpperBand}, Lower: {bollinger.LowerBand}\n";
+                Rsi = CalculateRsi(quotes),
+                MeanReversion = CalculateMeanReversion(quotes),
+                Momentum = CalculateMomentum(quotes),
+                Macd = CalculateMacd(quotes),
+                Bollinger = CalculateBollingerBands(quotes)
+            };
         }
+
+    }
+
+    public class BollingerBand
+    {
+        public decimal UpperBand { get; set; }
+        public decimal LowerBand { get; set; }
+    }
+
+    public class Macd
+    {
+        public decimal MacdValue { get; set; }
+        public decimal Signal { get; set; }
+        public decimal Histogram { get; set; }
+    }
+
+    public class Indicators
+    {
+        public decimal Rsi { get; set; }
+        public decimal MeanReversion { get; set; }
+        public decimal Momentum { get; set; }
+        public Macd Macd { get; set; }
+        public BollingerBand Bollinger { get; set; }
+    }
+
+    public class Decisions : Dictionary<string, Decision>
+    {
+        public const string RsiAndMomentum = "RsiAndMomentum";
+        public const string MeanReversionAndMomentum = "MeanReversionAndMomentum";
+        public const string Macd = "Macd";
+        public const string Bollinger = "Bollinger";
+        public Decisions()
+        {
+            Add(RsiAndMomentum, new Decision());
+            Add(MeanReversionAndMomentum, new Decision());
+            Add(Macd, new Decision());
+            Add(Bollinger, new Decision());
+        }
+
+        public List<Decision> Outcome()
+        {
+            int buysCount = Buys().Count;
+            int sellsCount = Sells().Count;
+            int holdsCount = Holds().Count;
+
+            if (buysCount > sellsCount && buysCount > holdsCount) { return Buys(); }
+            else if (sellsCount > buysCount && sellsCount > holdsCount) { return Sells(); }
+            return Holds();
+        }
+
+        public List<Decision> Buys()
+        {
+            return this.Where(x => x.Value.Outcome == BuySellHold.Buy).Select(x => x.Value).ToList();
+        }
+
+        public List<Decision> Sells()
+        {
+            return this.Where(x => x.Value.Outcome == BuySellHold.Sell).Select(x => x.Value).ToList();
+        }
+
+        public List<Decision> Holds()
+        {
+            return this.Where(x => x.Value.Outcome == BuySellHold.Hold).Select(x => x.Value).ToList();
+        }
+    }
+
+    public class Decision
+    {
+        public Decision()
+        {
+            Outcome = BuySellHold.Inconclusive;
+            Text = "";
+        }
+        public BuySellHold Outcome { get; set; }
+        public string Text { get; set; }
+    }
+
+    public enum BuySellHold
+    {
+        Inconclusive = 0,
+        Buy = 1,
+        Sell = 2,
+        Hold = 3,
     }
 }

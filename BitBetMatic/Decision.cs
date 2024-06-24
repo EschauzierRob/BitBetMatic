@@ -1,9 +1,14 @@
 namespace BitBetMatic
 {
-    public record Decision(BuySellHold Outcome, string Text)
+    
+    public class Decision
     {
-        public Decision() : this(BuySellHold.Inconclusive, "")
+        public Decision()
         {
+            Outcome = BuySellHold.Inconclusive;
+            Text = "";
         }
+        public BuySellHold Outcome { get; set; }
+        public string Text { get; set; }
     }
 }

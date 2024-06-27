@@ -13,6 +13,9 @@ namespace BitBetMatic
         {
             var api = new BitvavoApi();
 
+            var balance = await api.GetBalance();
+            Console.WriteLine(balance);
+
             // Run in parallel to improve performance
             var btcTask = ProcessForToken(api, "BTC-EUR", "BTC");
             var ethTask = ProcessForToken(api, "ETH-EUR", "ETH");
@@ -21,7 +24,7 @@ namespace BitBetMatic
             var decisionBtc = btcTask.Result;
             var decisionEth = ethTask.Result;
 
-            return new OkObjectResult($"{decisionBtc.text}\n{decisionEth.text}");
+            return new OkObjectResult($"Balance: {balance}\n\n Dicisions:\n{decisionBtc.text}\n{decisionEth.text}");
         }
 
         private async Task<(string text, Decisions decisions)> ProcessForToken(BitvavoApi api, string pair, string symbol)

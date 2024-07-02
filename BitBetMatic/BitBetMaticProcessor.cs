@@ -37,8 +37,6 @@ namespace BitBetMatic
 
         private static async Task TransactOutcome(BitvavoApi api, BuySellHold outcome, Balance euroBalance, Balance tokenBalance, string market)
         {
-            var price = await api.GetPrice(market);
-
             if (outcome == BuySellHold.Buy && euroBalance?.available > 0)
             {
                 decimal amount = euroBalance.available/10;
@@ -46,6 +44,7 @@ namespace BitBetMatic
             }
             else if (outcome == BuySellHold.Sell && tokenBalance?.available > 0)
             {
+            var price = await api.GetPrice(market);
                 decimal amount = tokenBalance.available*price/10;
                 await api.Sell(market, amount);
             }

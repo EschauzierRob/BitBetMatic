@@ -3,10 +3,9 @@ using RestSharp;
 using Skender.Stock.Indicators;
 using System;
 using System.Collections.Generic;
-using System.Net.Http;
+ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
 namespace BitBetMatic
@@ -20,7 +19,7 @@ namespace BitBetMatic
             Client = new RestClient(Environment.GetEnvironmentVariable("API_BASE_URL"));
         }
 
-        private void SetApiRequestHeaders(RestRequest request, string url, Method method, string body)
+        private void SetApiRequestHeaders(RestRequest request, string url, Method method, string body = "")
         {
             var timestamp = GetTime();
 
@@ -32,9 +31,8 @@ namespace BitBetMatic
 
         private string GetTime()
         {
-            var clientTime = new RestClient(Environment.GetEnvironmentVariable("API_BASE_URL"));
             var requestTime = new RestRequest("time", Method.Get);
-            var response_time = clientTime.Execute(requestTime);
+            var response_time = Client.Execute(requestTime);
             var jsonData = JsonConvert.DeserializeObject<dynamic>(response_time.Content.ToString());
 
             var time = jsonData["time"].ToString();
@@ -67,8 +65,6 @@ namespace BitBetMatic
             {
                 string url = $"ticker/price";
                 var request = new RestRequest(url + $"?market={market}", Method.Get);
-
-                // ApiRequestHeaders(request, url, nameof(Method.Get), null);
 
                 var response = await Client.ExecuteAsync(request);
                 var price = JsonConvert.DeserializeObject<dynamic>(response.Content).price;
@@ -138,10 +134,13 @@ namespace BitBetMatic
             }
         }
 
-        public async Task<string> PlaceOrder(string market, string side, decimal amount)
+        private async Task<string> PlaceOrder(string market, string side, decimal amount)
         {
-            var amountFormatted = amount.ToString();
-            if (amount % 1 == 0) { amountFormatted = amount.ToString("N0"); }
+            var marketInfo = await GetMarketInfo(market);
+            var precision = (int)marketInfo["pricePrecision"].Value;
+
+            var formattedAmount = FormatAmount(amount, precision);
+            if (amount % 1 == 0) { formattedAmount = amount.ToString("N0"); }
 
             try
             {
@@ -152,7 +151,7 @@ namespace BitBetMatic
                     market,
                     side,
                     orderType = "market",
-                    amountQuote = amountFormatted
+                    amountQuote = formattedAmount
                 };
                 var request = new RestRequest(url, method);
                 request.AddJsonBody(body);
@@ -182,6 +181,27 @@ namespace BitBetMatic
         public async Task<string> Sell(string market, decimal amount)
         {
             return await PlaceOrder(market, "sell", amount);
+        }
+        private async Task<dynamic> GetMarketInfo(string market)
+        {
+            var url = $"markets/?market={market}";
+            var request = new RestRequest(url, Method.Get);
+            SetApiRequestHeaders(request, url, Method.Get);
+
+            var response = await Client.ExecuteAsync(request);
+            if (response.IsSuccessful)
+            {
+                return JsonConvert.DeserializeObject<dynamic>(response.Content);
+            }
+            else
+            {
+                throw new Exception($"Error retrieving market info: {response.Content}");
+            }
+        }
+
+        private string FormatAmount(decimal amount, int precision)
+        {
+            return amount.ToString($"F{precision}", CultureInfo.InvariantCulture);
         }
     }
 

@@ -45,6 +45,8 @@ namespace BitBetMatic
         {
             string prehashString = $"{timestamp}{method}/v2/{url}{body}";
 
+            Console.WriteLine($"hashString: {prehashString}");
+
             using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(Environment.GetEnvironmentVariable("BITVAVO_API_SECRET"))))
             {
                 byte[] hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(prehashString));
@@ -111,7 +113,7 @@ namespace BitBetMatic
             }
         }
 
-        public async Task<string> GetBalance()
+        public async Task<List<Balance>> GetBalance()
         {
             try
             {
@@ -122,8 +124,8 @@ namespace BitBetMatic
                 var response = await Client.ExecuteAsync(request);
                 if (response.IsSuccessful)
                 {
-                    var balanceResponse = JsonConvert.DeserializeObject<dynamic>(response.Content);
-                    return $"Account balance: {balanceResponse}";
+                    var balanceResponse = JsonConvert.DeserializeObject<List<Balance>>(response.Content);
+                    return balanceResponse;
                 }
                 else
                 {
@@ -138,6 +140,9 @@ namespace BitBetMatic
 
         public async Task<string> PlaceOrder(string market, string side, decimal amount)
         {
+            var amountFormatted = amount.ToString();
+            if (amount % 1 == 0) { amountFormatted = amount.ToString("N0"); }
+
             try
             {
                 var url = "order";
@@ -147,11 +152,11 @@ namespace BitBetMatic
                     market,
                     side,
                     orderType = "market",
-                    amount
+                    amountQuote = amountFormatted
                 };
                 var request = new RestRequest(url, method);
                 request.AddJsonBody(body);
-                SetApiRequestHeaders(request, url, method, body.ToString());
+                SetApiRequestHeaders(request, url, method, JsonConvert.SerializeObject(body));
                 var response = await Client.ExecuteAsync(request);
                 if (response.IsSuccessful)
                 {

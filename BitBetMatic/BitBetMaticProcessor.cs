@@ -9,22 +9,46 @@ namespace BitBetMatic
 {
     public class BitBetMaticProcessor
     {
+        private const string BtcMarket = "BTC-EUR";
+        private const string EthMarket = "ETH-EUR";
+
         public async Task<IActionResult> Process()
         {
             var api = new BitvavoApi();
 
-            var balance = await api.GetBalance();
-            Console.WriteLine(balance);
-
             // Run in parallel to improve performance
-            var btcTask = ProcessForToken(api, "BTC-EUR", "BTC");
-            var ethTask = ProcessForToken(api, "ETH-EUR", "ETH");
+            var btcTask = ProcessForToken(api, BtcMarket, "BTC");
+            var ethTask = ProcessForToken(api, EthMarket, "ETH");
             await Task.WhenAll(btcTask, ethTask);
 
-            var decisionBtc = btcTask.Result;
-            var decisionEth = ethTask.Result;
+            var btcDecision = btcTask.Result;
+            var ethDecision = ethTask.Result;
 
-            return new OkObjectResult($"Balance: {balance}\n\n Dicisions:\n{decisionBtc.text}\n{decisionEth.text}");
+            var balance = await api.GetBalance();
+            var euroBalance = balance.FirstOrDefault(x => x.symbol == "EUR");
+            var btcBalance = balance.FirstOrDefault(x => x.symbol == "BTC");
+            var ethBalance = balance.FirstOrDefault(x => x.symbol == "ETH");
+
+            await TransactOutcome(api, btcDecision.decisions.GetOutcome(), euroBalance, btcBalance, BtcMarket);
+            await TransactOutcome(api, ethDecision.decisions.GetOutcome(), euroBalance, ethBalance, EthMarket);
+
+            return new OkObjectResult($"Balance: {balance}\n\n Decisions:\n{btcDecision.text}\n{ethDecision.text}");
+        }
+
+        private static async Task TransactOutcome(BitvavoApi api, BuySellHold outcome, Balance euroBalance, Balance tokenBalance, string market)
+        {
+            var price = await api.GetPrice(market);
+
+            if (outcome == BuySellHold.Buy && euroBalance?.available > 0)
+            {
+                decimal amount = euroBalance.available/10;
+                await api.Buy(market, amount);
+            }
+            else if (outcome == BuySellHold.Sell && tokenBalance?.available > 0)
+            {
+                decimal amount = tokenBalance.available*price/10;
+                await api.Sell(market, amount);
+            }
         }
 
         private async Task<(string text, Decisions decisions)> ProcessForToken(BitvavoApi api, string pair, string symbol)
@@ -41,7 +65,7 @@ namespace BitBetMatic
 
         private string DecisionToText(string symbol, decimal tokenPrice, Indicators indicators, Decisions decisions)
         {
-            var outcome = decisions.Outcome().First().Outcome;
+            var outcome = decisions.GetOutcome();
             var outcomeText = outcome switch
             {
                 BuySellHold.Buy => "Buy",
@@ -49,7 +73,7 @@ namespace BitBetMatic
                 _ => "Hold"
             };
 
-            var arguments = string.Join(Environment.NewLine, decisions.Outcome().Select(x => $" - {x.Text}"));
+            var arguments = string.Join(Environment.NewLine, decisions.GetOutcomeArguments().Select(x => $" - {x.Text}"));
             var decision = $"{outcomeText} {symbol}\n{arguments}";
 
             return $"{decision}\n" +

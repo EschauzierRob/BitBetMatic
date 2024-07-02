@@ -17,7 +17,7 @@ namespace BitBetMatic
             Add(Bollinger, new Decision());
         }
 
-        public List<Decision> Outcome()
+        public List<Decision> GetOutcomeArguments()
         {
             int buysCount = Buys().Count;
             int sellsCount = Sells().Count;
@@ -28,19 +28,13 @@ namespace BitBetMatic
             return Holds();
         }
 
-        public List<Decision> Buys()
-        {
-            return this.Where(x => x.Value.Outcome == BuySellHold.Buy).Select(x => x.Value).ToList();
-        }
+        public BuySellHold GetOutcome() => GetOutcomeArguments().First().Outcome;
 
-        public List<Decision> Sells()
-        {
-            return this.Where(x => x.Value.Outcome == BuySellHold.Sell).Select(x => x.Value).ToList();
-        }
+        public List<Decision> Buys() => this.Where(x => x.Value.Outcome == BuySellHold.Buy).Select(x => x.Value).ToList();
 
-        public List<Decision> Holds()
-        {
-            return this.Where(x => x.Value.Outcome == BuySellHold.Hold).Select(x => x.Value).ToList();
-        }
+
+        public List<Decision> Sells() => this.Where(x => x.Value.Outcome == BuySellHold.Sell).Select(x => x.Value).ToList();
+
+        public List<Decision> Holds() => this.Where(x => x.Value.Outcome == BuySellHold.Hold).Select(x => x.Value).ToList();
     }
 }

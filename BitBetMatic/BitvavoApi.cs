@@ -31,6 +31,7 @@ namespace BitBetMatic
 
         private string GetTime()
         {
+            Console.WriteLine("Requesting BitVavo GET Time endpoint");
             var requestTime = new RestRequest("time", Method.Get);
             var response_time = Client.Execute(requestTime);
             var jsonData = JsonConvert.DeserializeObject<dynamic>(response_time.Content.ToString());
@@ -43,7 +44,7 @@ namespace BitBetMatic
         {
             string prehashString = $"{timestamp}{method}/v2/{url}{body}";
 
-            Console.WriteLine($"hashString: {prehashString}");
+            // Console.WriteLine($"hashString: {prehashString}");
 
             using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(Environment.GetEnvironmentVariable("BITVAVO_API_SECRET"))))
             {
@@ -63,6 +64,7 @@ namespace BitBetMatic
         {
             try
             {
+            Console.WriteLine($"Requesting BitVavo GET price endpoint for market {market}");
                 string url = $"ticker/price";
                 var request = new RestRequest(url + $"?market={market}", Method.Get);
 
@@ -80,6 +82,7 @@ namespace BitBetMatic
         {
             try
             {
+                Console.WriteLine($"Requesting BitVavo GET candels endpoint for market {market}");
                 var request = new RestRequest($"{market}/candles", Method.Get);
                 request.AddParameter("interval", "1h");
                 request.AddParameter("limit", "100");
@@ -109,10 +112,11 @@ namespace BitBetMatic
             }
         }
 
-        public async Task<List<Balance>> GetBalance()
+        public async Task<List<Balance>> GetBalances()
         {
             try
             {
+            Console.WriteLine("Requesting BitVavo GET Balances endpoint");
                 var url = "balance";
                 var method = Method.Get;
                 var request = new RestRequest(url, method);
@@ -136,6 +140,7 @@ namespace BitBetMatic
 
         private async Task<string> PlaceOrder(string market, string side, decimal amount)
         {
+            Console.WriteLine($"Requesting BitVavo POST order endpoint {side} {market}");
             var marketInfo = await GetMarketInfo(market);
             var precision = (int)marketInfo["pricePrecision"].Value;
 
@@ -184,6 +189,7 @@ namespace BitBetMatic
         }
         private async Task<dynamic> GetMarketInfo(string market)
         {
+            Console.WriteLine($"Requesting BitVavo GET Market endpoint for {market}");
             var url = $"markets/?market={market}";
             var request = new RestRequest(url, Method.Get);
             SetApiRequestHeaders(request, url, Method.Get);

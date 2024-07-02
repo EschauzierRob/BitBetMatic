@@ -4,12 +4,13 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
+using System;
 
 namespace BitBetMatic
 {
-    public static class BitBetMaticFunction
+    public static class BitBetMaticFunctionAtWill
     {
-        [FunctionName("BitBetMaticFunction")]
+        [FunctionName("BitBetMaticFunctionAtWill")]
         public static async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
             ILogger log)
@@ -17,6 +18,19 @@ namespace BitBetMatic
             log.LogInformation("C# HTTP trigger function processed a request.");
 
             return await new BitBetMaticProcessor().Process();
+        }
+    }
+
+    public static class BitBetMaticFunction
+    {
+        [FunctionName("BitBetMaticFunction")]
+        public static async Task Run(
+            [TimerTrigger("0 0 12 * * *")] TimerInfo timer, 
+            ILogger log)
+        {
+            log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
+
+            await new BitBetMaticProcessor().Process();
         }
     }
 }

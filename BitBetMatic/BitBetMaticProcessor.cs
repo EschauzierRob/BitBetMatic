@@ -24,7 +24,7 @@ namespace BitBetMatic
             var btcDecision = btcTask.Result;
             var ethDecision = ethTask.Result;
 
-            var balance = await api.GetBalance();
+            var balance = await api.GetBalances();
             var euroBalance = balance.FirstOrDefault(x => x.symbol == "EUR");
             var btcBalance = balance.FirstOrDefault(x => x.symbol == "BTC");
             var ethBalance = balance.FirstOrDefault(x => x.symbol == "ETH");
@@ -40,13 +40,18 @@ namespace BitBetMatic
             if (outcome == BuySellHold.Buy && euroBalance?.available > 0)
             {
                 decimal amount = euroBalance.available/10;
+                Console.WriteLine($"Buying {amount} euro worth of {market}");
                 await api.Buy(market, amount);
             }
             else if (outcome == BuySellHold.Sell && tokenBalance?.available > 0)
             {
             var price = await api.GetPrice(market);
                 decimal amount = tokenBalance.available*price/10;
+                Console.WriteLine($"Selling {amount} euro worth of {market}");
                 await api.Sell(market, amount);
+            }
+            else {
+                Console.WriteLine($"Holding buying/selling of {market}");
             }
         }
 

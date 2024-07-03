@@ -3,6 +3,8 @@ using Skender.Stock.Indicators;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace BitBetMatic
@@ -12,7 +14,7 @@ namespace BitBetMatic
         private const string BtcMarket = "BTC-EUR";
         private const string EthMarket = "ETH-EUR";
 
-        public async Task<IActionResult> Process()
+        public async Task<IActionResult> Process(bool transact = true)
         {
             var api = new BitvavoApi();
 
@@ -24,33 +26,58 @@ namespace BitBetMatic
             var btcDecision = btcTask.Result;
             var ethDecision = ethTask.Result;
 
-            var balance = await api.GetBalances();
-            var euroBalance = balance.FirstOrDefault(x => x.symbol == "EUR");
-            var btcBalance = balance.FirstOrDefault(x => x.symbol == "BTC");
-            var ethBalance = balance.FirstOrDefault(x => x.symbol == "ETH");
+            var balances = await api.GetBalances();
+            var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
+            var btcBalance = balances.FirstOrDefault(x => x.symbol == "BTC");
+            var ethBalance = balances.FirstOrDefault(x => x.symbol == "ETH");
 
-            await TransactOutcome(api, btcDecision.decisions.GetOutcome(), euroBalance, btcBalance, BtcMarket);
-            await TransactOutcome(api, ethDecision.decisions.GetOutcome(), euroBalance, ethBalance, EthMarket);
+            if (transact)
+            {
+                await TransactOutcome(api, btcDecision.decisions, euroBalance, btcBalance, BtcMarket);
+                await TransactOutcome(api, ethDecision.decisions, euroBalance, ethBalance, EthMarket);
+            }
 
-            return new OkObjectResult($"Balance: {balance}\n\n Decisions:\n{btcDecision.text}\n{ethDecision.text}");
+            var balancesFormatted = FormatBalances(balances);
+
+            string returnText = $"{balancesFormatted}\n\n Decisions:\n{btcDecision.text}\n{ethDecision.text}";
+            Console.WriteLine($"BitBetMatic ReturnText: {returnText}");
+
+            return new OkObjectResult(returnText);
         }
 
-        private static async Task TransactOutcome(BitvavoApi api, BuySellHold outcome, Balance euroBalance, Balance tokenBalance, string market)
+        private static string FormatBalances(List<Balance> balances)
         {
+            var balanceString = new StringBuilder();
+            balanceString.AppendLine($"Balances available:");
+
+            foreach (var balance in balances)
+            {
+                balanceString.AppendLine($"{balance.available} {balance.symbol}");
+            }
+
+            return balanceString.ToString();
+        }
+
+        private static async Task TransactOutcome(BitvavoApi api, Decisions decisions, Balance euroBalance, Balance tokenBalance, string market)
+        {
+            var outcome = decisions.GetOutcome();
+            var count = decisions.GetOutcomeArguments().Count;
+
             if (outcome == BuySellHold.Buy && euroBalance?.available > 0)
             {
-                decimal amount = euroBalance.available/10;
+                decimal amount = euroBalance.available / 5 * count;
                 Console.WriteLine($"Buying {amount} euro worth of {market}");
                 await api.Buy(market, amount);
             }
             else if (outcome == BuySellHold.Sell && tokenBalance?.available > 0)
             {
-            var price = await api.GetPrice(market);
-                decimal amount = tokenBalance.available*price/10;
+                var price = await api.GetPrice(market);
+                decimal amount = tokenBalance.available * price / 5 * count;
                 Console.WriteLine($"Selling {amount} euro worth of {market}");
                 await api.Sell(market, amount);
             }
-            else {
+            else
+            {
                 Console.WriteLine($"Holding buying/selling of {market}");
             }
         }

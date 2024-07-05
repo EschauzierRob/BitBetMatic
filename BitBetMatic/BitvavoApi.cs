@@ -78,14 +78,14 @@ namespace BitBetMatic
             }
         }
 
-        public async Task<List<Quote>> GetCandleData(string market)
+        public async Task<List<Quote>> GetCandleData(string market, string interval = "1h", string limit = "100")
         {
             try
             {
                 Console.WriteLine($"Requesting BitVavo GET candels endpoint for market {market}");
                 var request = new RestRequest($"{market}/candles", Method.Get);
-                request.AddParameter("interval", "1h");
-                request.AddParameter("limit", "100");
+                request.AddParameter("interval", interval);
+                request.AddParameter("limit", limit);
                 var response = await Client.ExecuteAsync(request);
                 var candles = JsonConvert.DeserializeObject<dynamic>(response.Content);
 
@@ -141,10 +141,8 @@ namespace BitBetMatic
         private async Task<string> PlaceOrder(string market, string side, decimal amount)
         {
             Console.WriteLine($"Requesting BitVavo POST order endpoint {side} {market}");
-            var marketInfo = await GetMarketInfo(market);
-            var precision = (int)marketInfo["pricePrecision"].Value;
 
-            var formattedAmount = FormatAmount(amount, precision);
+            var formattedAmount = FormatAmount(amount, 2);
             if (amount % 1 == 0) { formattedAmount = amount.ToString("N0"); }
 
             try

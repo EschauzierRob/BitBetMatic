@@ -16,8 +16,10 @@ namespace BitBetMatic
             ILogger log)
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
+            var result = await new BitBetMaticProcessor().Process(false);
+            log.LogInformation(result.ToString());
 
-            return await new BitBetMaticProcessor().Process();
+            return result;
         }
     }
 
@@ -25,12 +27,14 @@ namespace BitBetMatic
     {
         [FunctionName("BitBetMaticFunction")]
         public static async Task Run(
-            [TimerTrigger("0 0 */1 * * *")] TimerInfo timer, 
+            //05-07-2024 20:25
+            [TimerTrigger("0 0 */1 * * *")] TimerInfo timer,
             ILogger log)
         {
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
 
-            await new BitBetMaticProcessor().Process(false);
+            var result = await new BitBetMaticProcessor().Process();
+            log.LogInformation(result.ToString());
         }
     }
 }

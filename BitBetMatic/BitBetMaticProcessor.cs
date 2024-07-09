@@ -31,8 +31,8 @@ namespace BitBetMatic
         public async Task<string> ProcessforToken(BitvavoApi api, List<Balance> balances, string market, string symbol, bool agressive, bool transact = true)
         {
             var tradingStrategy = new TradingStrategy(api);
-            
-            var analyse = agressive?tradingStrategy.AnalyzeMarketAgressive(market).Result : tradingStrategy.AnalyzeMarketModerate(market).Result;
+
+            var analyse = agressive ? tradingStrategy.AnalyzeMarketAgressive(market).Result : tradingStrategy.AnalyzeMarketModerate(market).Result;
 
             var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
             var tokenBalance = balances.FirstOrDefault(x => x.symbol == symbol);
@@ -68,28 +68,34 @@ namespace BitBetMatic
             var tokenPercentageAmount = tokenBalanced * percentagePerScore;
             var minOrderAmount = Functions.ToDecimal(5);
 
-            if (outcome == BuySellHold.Buy)
+            switch (outcome)
             {
-                var amount = Functions.GetHigher(euroPercentageAmount, minOrderAmount);
-                action = $"Buying {amount} euro worth of {market}";
-                if (transact)
-                {
-                    await api.Buy(market, amount);
-                }
+                case BuySellHold.Buy:
+                    {
+                        var amount = Functions.GetHigher(euroPercentageAmount, minOrderAmount);
+                        action = $"Buying {amount} euro worth of {market}";
+                        if (transact)
+                        {
+                            await api.Buy(market, amount);
+                        }
+                    }
+                    break;
+                case BuySellHold.Sell:
+                    {
+
+                        var amount = Functions.GetHigher(tokenPercentageAmount, minOrderAmount);
+                        action = $"Selling {amount} euro worth of {market}";
+                        if (transact)
+                        {
+                            await api.Sell(market, amount);
+                        }
+                    }
+                    break;
+                default:
+                    action = $"Holding {tokenBalanced} of {market}";
+                    break;
             }
-            else if (outcome == BuySellHold.Sell)
-            {
-                var amount = Functions.GetHigher(tokenPercentageAmount, minOrderAmount);
-                action = $"Selling {amount} euro worth of {market}";
-                if (transact)
-                {
-                    await api.Sell(market, amount);
-                }
-            }
-            else
-            {
-                action = $"Holding {tokenBalanced} of {market}";
-            }
+
             Console.WriteLine(action);
 
             return action + $", at a score of {score}";

@@ -20,30 +20,19 @@ namespace BitBetMatic
             var sb = new StringBuilder();
             sb.AppendLine(FormatBalances(balances));
             sb.AppendLine($"\nModerate advice:\n");
-            sb.AppendLine($"{ProcessModerate(api, balances, BtcMarket, "BTC", transact).Result}");
-            sb.AppendLine($"{ProcessModerate(api, balances, EthMarket, "ETH", transact).Result}");
+            sb.AppendLine($"{ProcessforToken(api, balances, BtcMarket, "BTC", false, transact).Result}");
+            sb.AppendLine($"{ProcessforToken(api, balances, EthMarket, "ETH", false, transact).Result}");
             sb.AppendLine($"\nAgressive advice:\n");
-            sb.AppendLine($"{ProcessAgressive(api, balances, BtcMarket, "BTC", false).Result}");
-            sb.AppendLine($"{ProcessAgressive(api, balances, EthMarket, "ETH", transact).Result}");
+            sb.AppendLine($"{ProcessforToken(api, balances, BtcMarket, "BTC", true, false).Result}");
+            sb.AppendLine($"{ProcessforToken(api, balances, EthMarket, "ETH", true, transact).Result}");
 
             return new OkObjectResult(sb.ToString());
         }
-        public async Task<string> ProcessModerate(BitvavoApi api, List<Balance> balances, string market, string symbol, bool transact = true)
+        public async Task<string> ProcessforToken(BitvavoApi api, List<Balance> balances, string market, string symbol, bool agressive, bool transact = true)
         {
             var tradingStrategy = new TradingStrategy(api);
-            var analyse = tradingStrategy.AnalyzeMarketModerate(market).Result;
-
-            var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
-            var tokenBalance = balances.FirstOrDefault(x => x.symbol == symbol);
-
-            var outcome = await TransactOutcome(api, analyse.Score, analyse.Signal, euroBalance, tokenBalance, market, transact);
-
-            return $" - {outcome}";
-        }
-        public async Task<string> ProcessAgressive(BitvavoApi api, List<Balance> balances, string market, string symbol, bool transact = true)
-        {
-            var tradingStrategy = new TradingStrategy(api);
-            var analyse = tradingStrategy.AnalyzeMarketAgressive(market).Result;
+            
+            var analyse = agressive?tradingStrategy.AnalyzeMarketAgressive(market).Result : tradingStrategy.AnalyzeMarketModerate(market).Result;
 
             var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
             var tokenBalance = balances.FirstOrDefault(x => x.symbol == symbol);

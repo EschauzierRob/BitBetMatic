@@ -19,49 +19,39 @@ namespace BitBetMatic
 
             var sb = new StringBuilder();
             sb.AppendLine(FormatBalances(balances));
-            sb.AppendLine($"\nModerate advice: {ProcessModerate(api, balances, transact).Result}");
-            sb.AppendLine($"\nAgressive advice: {ProcessAgressive(api, balances, false).Result}");
+            sb.AppendLine($"\nModerate advice:\n");
+            sb.AppendLine($"{ProcessModerate(api, balances, BtcMarket, "BTC", transact).Result}");
+            sb.AppendLine($"{ProcessModerate(api, balances, EthMarket, "ETH", transact).Result}");
+            sb.AppendLine($"\nAgressive advice:\n");
+            sb.AppendLine($"{ProcessAgressive(api, balances, BtcMarket, "BTC", false).Result}");
+            sb.AppendLine($"{ProcessAgressive(api, balances, EthMarket, "ETH", transact).Result}");
 
             return new OkObjectResult(sb.ToString());
         }
-        public async Task<string> ProcessModerate(BitvavoApi api, List<Balance> balances, bool transact = true)
+        public async Task<string> ProcessModerate(BitvavoApi api, List<Balance> balances, string market, string symbol, bool transact = true)
         {
             var tradingStrategy = new TradingStrategy(api);
-            var btcAnalyse = tradingStrategy.AnalyzeMarketModerate(BtcMarket).Result;
-            var ethAnalyse = tradingStrategy.AnalyzeMarketModerate(EthMarket).Result;
+            var analyse = tradingStrategy.AnalyzeMarketModerate(market).Result;
 
             var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
-            var btcBalance = balances.FirstOrDefault(x => x.symbol == "BTC");
-            var ethBalance = balances.FirstOrDefault(x => x.symbol == "ETH");
+            var tokenBalance = balances.FirstOrDefault(x => x.symbol == symbol);
 
-            var btcOutcome = "";
-            var ethOutcome = "";
+            var outcome = await TransactOutcome(api, analyse.Score, analyse.Signal, euroBalance, tokenBalance, market, transact);
 
-            btcOutcome = await TransactOutcome(api, btcAnalyse.Score, btcAnalyse.Signal, euroBalance, btcBalance, BtcMarket, transact);
-            ethOutcome = await TransactOutcome(api, ethAnalyse.Score, ethAnalyse.Signal, euroBalance, ethBalance, EthMarket, transact);
-
-            return $"\n {btcOutcome} \n {ethOutcome}";
+            return $" - {outcome}";
         }
-        public async Task<string> ProcessAgressive(BitvavoApi api, List<Balance> balances, bool transact = true)
+        public async Task<string> ProcessAgressive(BitvavoApi api, List<Balance> balances, string market, string symbol, bool transact = true)
         {
             var tradingStrategy = new TradingStrategy(api);
-            var btcAnalyse = tradingStrategy.AnalyzeMarketAgressive(BtcMarket).Result;
-            var ethAnalyse = tradingStrategy.AnalyzeMarketAgressive(EthMarket).Result;
+            var analyse = tradingStrategy.AnalyzeMarketAgressive(market).Result;
 
             var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
-            var btcBalance = balances.FirstOrDefault(x => x.symbol == "BTC");
-            var ethBalance = balances.FirstOrDefault(x => x.symbol == "ETH");
+            var tokenBalance = balances.FirstOrDefault(x => x.symbol == symbol);
 
-            var btcOutcome = "";
-            var ethOutcome = "";
+            var outcome = await TransactOutcome(api, analyse.Score, analyse.Signal, euroBalance, tokenBalance, market, transact);
 
-            btcOutcome = await TransactOutcome(api, btcAnalyse.Score, btcAnalyse.Signal, euroBalance, btcBalance, BtcMarket, transact);
-            ethOutcome = await TransactOutcome(api, ethAnalyse.Score, ethAnalyse.Signal, euroBalance, ethBalance, EthMarket, transact);
-
-            return $"\n {btcOutcome} \n {ethOutcome}";
+            return $" - {outcome}";
         }
-
-
 
         private static string FormatBalances(List<Balance> balances)
         {
@@ -89,7 +79,7 @@ namespace BitBetMatic
             var tokenPercentageAmount = tokenBalanced * percentagePerScore;
             var minOrderAmount = Functions.ToDecimal(5);
 
-            if (outcome == BuySellHold.Buy && euroPercentageAmount >= minOrderAmount)
+            if (outcome == BuySellHold.Buy)
             {
                 var amount = Functions.GetHigher(euroPercentageAmount, minOrderAmount);
                 action = $"Buying {amount} euro worth of {market}";
@@ -98,7 +88,7 @@ namespace BitBetMatic
                     await api.Buy(market, amount);
                 }
             }
-            else if (outcome == BuySellHold.Sell && tokenPercentageAmount >= minOrderAmount)
+            else if (outcome == BuySellHold.Sell)
             {
                 var amount = Functions.GetHigher(tokenPercentageAmount, minOrderAmount);
                 action = $"Selling {amount} euro worth of {market}";
@@ -113,7 +103,7 @@ namespace BitBetMatic
             }
             Console.WriteLine(action);
 
-            return action;
+            return action + $", at a score of {score}";
         }
     }
 }

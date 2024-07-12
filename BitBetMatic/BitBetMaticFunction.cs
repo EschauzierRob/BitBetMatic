@@ -34,7 +34,7 @@ namespace BitBetMatic
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
 
             var result = await new BitBetMaticProcessor().Process();
-            var resultContent =(result as OkObjectResult)!.Value as string;
+            var resultContent = (result as OkObjectResult)!.Value as string;
             log.LogInformation(resultContent);
         }
     }

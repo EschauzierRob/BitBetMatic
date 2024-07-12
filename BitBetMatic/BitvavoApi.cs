@@ -3,7 +3,7 @@ using RestSharp;
 using Skender.Stock.Indicators;
 using System;
 using System.Collections.Generic;
- using System.Globalization;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -64,7 +64,7 @@ namespace BitBetMatic
         {
             try
             {
-            Console.WriteLine($"Requesting BitVavo GET price endpoint for market {market}");
+                Console.WriteLine($"Requesting BitVavo GET price endpoint for market {market}");
                 string url = $"ticker/price";
                 var request = new RestRequest(url + $"?market={market}", Method.Get);
 
@@ -116,7 +116,7 @@ namespace BitBetMatic
         {
             try
             {
-            Console.WriteLine("Requesting BitVavo GET Balances endpoint");
+                Console.WriteLine("Requesting BitVavo GET Balances endpoint");
                 var url = "balance";
                 var method = Method.Get;
                 var request = new RestRequest(url, method);

@@ -27,8 +27,8 @@ namespace BitBetMatic
     {
         [FunctionName("BitBetMaticFunction")]
         public static async Task Run(
-            //05-07-2024 20:25
-            [TimerTrigger("0 0 */1 * * *")] TimerInfo timer,
+            //12-07-2024 ~11:55
+            [TimerTrigger("0 */15 * * * *")] TimerInfo timer,
             ILogger log)
         {
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");

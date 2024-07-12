@@ -20,10 +20,10 @@ namespace BitBetMatic
             var sb = new StringBuilder();
             sb.AppendLine(FormatBalances(balances));
             sb.AppendLine($"\nModerate advice:\n");
-            sb.AppendLine($"{ProcessforToken(api, balances, BtcMarket, "BTC", false, transact).Result}");
-            sb.AppendLine($"{ProcessforToken(api, balances, EthMarket, "ETH", false, transact).Result}");
+            sb.AppendLine($"{ProcessforToken(api, balances, BtcMarket, "BTC", false, false).Result}");
+            sb.AppendLine($"{ProcessforToken(api, balances, EthMarket, "ETH", false, false).Result}");
             sb.AppendLine($"\nAgressive advice:\n");
-            sb.AppendLine($"{ProcessforToken(api, balances, BtcMarket, "BTC", true, false).Result}");
+            sb.AppendLine($"{ProcessforToken(api, balances, BtcMarket, "BTC", true, transact).Result}");
             sb.AppendLine($"{ProcessforToken(api, balances, EthMarket, "ETH", true, transact).Result}");
 
             return new OkObjectResult(sb.ToString());
@@ -72,8 +72,13 @@ namespace BitBetMatic
             {
                 case BuySellHold.Buy:
                     {
+                        if (minOrderAmount > euroBalanced)
+                        {
+                            action = $"Holding {euroBalanced.ToString("F2")} of {market}, because balance is lower than minimum ordersize.";
+                            break;
+                        }
                         var amount = Functions.GetHigher(euroPercentageAmount, minOrderAmount);
-                        action = $"Buying {amount} euro worth of {market}";
+                        action = $"Buying {amount.ToString("F2")} euro worth of {market}";
                         if (transact)
                         {
                             await api.Buy(market, amount);
@@ -82,9 +87,13 @@ namespace BitBetMatic
                     break;
                 case BuySellHold.Sell:
                     {
-
+                        if (minOrderAmount > tokenBalanced)
+                        {
+                            action = $"Holding {tokenBalanced.ToString("F2")} of {market}, because balance is lower than minimum ordersize.";
+                            break;
+                        }
                         var amount = Functions.GetHigher(tokenPercentageAmount, minOrderAmount);
-                        action = $"Selling {amount} euro worth of {market}";
+                        action = $"Selling {amount.ToString("F2")} euro worth of {market}";
                         if (transact)
                         {
                             await api.Sell(market, amount);
@@ -92,7 +101,7 @@ namespace BitBetMatic
                     }
                     break;
                 default:
-                    action = $"Holding {tokenBalanced} of {market}";
+                    action = $"Holding {tokenBalanced.ToString("F2")} of {market}";
                     break;
             }
 

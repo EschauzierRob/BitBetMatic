@@ -74,7 +74,7 @@ namespace BitBetMatic
                     {
                         if (minOrderAmount > euroBalanced)
                         {
-                            action = $"Holding {euroBalanced.ToString("F2")} of {market}, because balance is lower than minimum ordersize.";
+                            action = $"Holding: Can't buy {euroBalanced.ToString("F2")} of {market}, because euro balance is lower than minimum ordersize.";
                             break;
                         }
                         var amount = Functions.GetHigher(euroPercentageAmount, minOrderAmount);
@@ -89,7 +89,7 @@ namespace BitBetMatic
                     {
                         if (minOrderAmount > tokenBalanced)
                         {
-                            action = $"Holding {tokenBalanced.ToString("F2")} of {market}, because balance is lower than minimum ordersize.";
+                            action = $"Holding: Can't sell {tokenBalanced.ToString("F2")} of {market}, because token balance is lower than minimum ordersize.";
                             break;
                         }
                         var amount = Functions.GetHigher(tokenPercentageAmount, minOrderAmount);

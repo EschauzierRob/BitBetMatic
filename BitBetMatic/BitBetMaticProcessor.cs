@@ -16,30 +16,34 @@ namespace BitBetMatic
         {
             var api = new BitvavoApi();
             var balances = await api.GetBalances();
+            var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
+
 
             var sb = new StringBuilder();
             sb.AppendLine(FormatBalances(balances));
-            sb.AppendLine($"\nModerate advice:\n");
-            sb.AppendLine($"{ProcessforToken(api, balances, BtcMarket, "BTC", false, false).Result}");
-            sb.AppendLine($"{ProcessforToken(api, balances, EthMarket, "ETH", false, false).Result}");
             sb.AppendLine($"\nAgressive advice:\n");
-            sb.AppendLine($"{ProcessforToken(api, balances, BtcMarket, "BTC", true, transact).Result}");
-            sb.AppendLine($"{ProcessforToken(api, balances, EthMarket, "ETH", true, transact).Result}");
+            
+            var markets = new List<string> { BtcMarket, EthMarket };
+
+            foreach (var market in markets)
+            {
+                var analyse = ProcessforToken(api, market, true, transact).Result;
+                var tokenBalance = balances.FirstOrDefault(x => x.symbol == GetSymbolFormMarket(market));
+
+                var outcome = await TransactOutcome(api, analyse.Score, analyse.Signal, euroBalance, tokenBalance, market, transact);
+                sb.AppendLine($"{outcome}");
+            }
 
             return new OkObjectResult(sb.ToString());
         }
-        public async Task<string> ProcessforToken(BitvavoApi api, List<Balance> balances, string market, string symbol, bool agressive, bool transact = true)
+
+        public async Task<(BuySellHold Signal, int Score)> ProcessforToken(BitvavoApi api, string market, bool agressive, bool transact = true)
         {
             var tradingStrategy = new TradingStrategy(api);
 
-            var analyse = agressive ? tradingStrategy.AnalyzeMarketAgressive(market).Result : tradingStrategy.AnalyzeMarketModerate(market).Result;
+            var analyse = agressive ? await tradingStrategy.AnalyzeMarketAgressive(market) : await tradingStrategy.AnalyzeMarketModerate(market);
 
-            var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
-            var tokenBalance = balances.FirstOrDefault(x => x.symbol == symbol);
-
-            var outcome = await TransactOutcome(api, analyse.Score, analyse.Signal, euroBalance, tokenBalance, market, transact);
-
-            return $" - {outcome}";
+            return analyse;
         }
 
         private static string FormatBalances(List<Balance> balances)
@@ -74,7 +78,7 @@ namespace BitBetMatic
                     {
                         if (minOrderAmount > euroBalanced)
                         {
-                            action = $"Holding: Can't buy {euroBalanced.ToString("F2")} of {market}, because euro balance is lower than minimum ordersize.";
+                            action = $"Holding: Can't buy {euroBalanced.ToString("F2")} of {market}, because euro balance is lower than minimum ordersize";
                             break;
                         }
                         var amount = Functions.GetHigher(euroPercentageAmount, minOrderAmount);
@@ -107,7 +111,12 @@ namespace BitBetMatic
 
             Console.WriteLine(action);
 
-            return action + $", at a score of {score}";
+            return $"{action}, at a score of {score}";
+        }
+
+        private string GetSymbolFormMarket(string market)
+        {
+            return market.Substring(0, 3);
         }
     }
 }

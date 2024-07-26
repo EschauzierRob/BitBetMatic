@@ -41,7 +41,7 @@ namespace BitBetMatic
         {
             var tradingStrategy = new TradingStrategy(api);
 
-            var analyse = agressive ? await tradingStrategy.AnalyzeMarketAgressive(market) : await tradingStrategy.AnalyzeMarketModerate(market);
+            var analyse = agressive ? await tradingStrategy.AnalyzeMarket(market) : await tradingStrategy.AnalyzeMarketModerate(market);
 
             return analyse;
         }

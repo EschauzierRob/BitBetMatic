@@ -1,3 +1,4 @@
+using BitBetMatic.API;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -21,27 +22,26 @@ namespace BitBetMatic
             sb.AppendLine($"\nTrading advice:\n");
 
             var markets = GetMarkets(false);
-            await EnactStrategy(transact, sb, markets, Strategy.ModerateStrategy);
-            await EnactStrategy(transact, sb, markets, Strategy.AgressiveStrategy);
-            await EnactStrategy(transact, sb, markets, Strategy.ScoredStrategy);
-            await EnactStrategy(transact, sb, markets, Strategy.StoplossStrategy);
-            await EnactStrategy(transact, sb, markets, Strategy.AdvancedStrategy);
+            await EnactStrategy(transact, sb, markets, new ModerateStrategy(api));
+            await EnactStrategy(transact, sb, markets, new AgressiveStrategy(api));
+            await EnactStrategy(transact, sb, markets, new ScoredStrategy(api));
+            await EnactStrategy(transact, sb, markets, new StoplossStrategy(api));
+            await EnactStrategy(transact, sb, markets, new AdvancedStrategy(api));
 
             return new OkObjectResult(sb.ToString());
         }
 
-        private async Task EnactStrategy(bool transact, StringBuilder sb, List<string> markets, Strategy strategy)
+        private async Task EnactStrategy(bool transact, StringBuilder sb, List<string> markets, ITradingStrategy strategy)
         {
-            var tradingStrategy = new TradingStrategy(api, strategy);
             var analyses = new Dictionary<string, (BuySellHold Signal, int Score)>();
-            sb.AppendLine($"\nEnacting strategy '{Enum.GetName(typeof(Strategy), tradingStrategy.GetStrategy())}':\n");
+            sb.AppendLine($"\nEnacting strategy '{strategy.GetType().Name}':\n");
 
             var balances = await api.GetBalances();
             var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
 
             foreach (var market in markets)
             {
-                var analysis = await tradingStrategy.AnalyzeMarket(market);
+                var analysis = await strategy.AnalyzeMarket(market);
                 analyses.Add(market, analysis);
             }
 

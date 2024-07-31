@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Skender.Stock.Indicators;
 
-namespace BitBetMatic
+namespace BitBetMatic.API
 {
     public interface IApiWrapper
     {

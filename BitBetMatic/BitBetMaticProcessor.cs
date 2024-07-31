@@ -15,19 +15,33 @@ namespace BitBetMatic
         public async Task<IActionResult> Process(bool transact = true)
         {
             api = new BitvavoApi();
-            var balances = await api.GetBalances();
-            var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
 
             var sb = new StringBuilder();
-            sb.AppendLine(FormatBalances(balances));
+            // sb.AppendLine(FormatBalances(balances));
             sb.AppendLine($"\nTrading advice:\n");
 
             var markets = GetMarkets(false);
+            await EnactStrategy(transact, sb, markets, Strategy.ModerateStrategy);
+            await EnactStrategy(transact, sb, markets, Strategy.AgressiveStrategy);
+            await EnactStrategy(transact, sb, markets, Strategy.ScoredStrategy);
+            await EnactStrategy(transact, sb, markets, Strategy.StoplossStrategy);
+            await EnactStrategy(transact, sb, markets, Strategy.AdvancedStrategy);
+
+            return new OkObjectResult(sb.ToString());
+        }
+
+        private async Task EnactStrategy(bool transact, StringBuilder sb, List<string> markets, Strategy strategy)
+        {
+            var tradingStrategy = new TradingStrategy(api, strategy);
             var analyses = new Dictionary<string, (BuySellHold Signal, int Score)>();
+            sb.AppendLine($"\nEnacting strategy '{Enum.GetName(typeof(Strategy), tradingStrategy.GetStrategy())}':\n");
+
+            var balances = await api.GetBalances();
+            var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
 
             foreach (var market in markets)
             {
-                var analysis = await ProcessforToken(api, market);
+                var analysis = await tradingStrategy.AnalyzeMarket(market);
                 analyses.Add(market, analysis);
             }
 
@@ -51,21 +65,9 @@ namespace BitBetMatic
 
                 sb.AppendLine($"{outcome}");
             }
-
-            return new OkObjectResult(sb.ToString());
         }
 
-
-        private async Task<(BuySellHold Signal, int Score)> ProcessforToken(BitvavoApi api, string market)
-        {
-            var tradingStrategy = new TradingStrategy(api);
-
-            var analyse = await tradingStrategy.AnalyzeMarketWithStopLoss(market);
-
-            return analyse;
-        }
-
-        private static async Task<string> TransactOutcome(BitvavoApi api, int score, BuySellHold outcome, Balance euroBalance, Balance tokenBalance, string market, bool transact)
+        private static async Task<string> TransactOutcome(IApiWrapper api, int score, BuySellHold outcome, Balance euroBalance, Balance tokenBalance, string market, bool transact)
         {
             string action;
             var price = await api.GetPrice(market);

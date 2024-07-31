@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,52 +12,58 @@ namespace BitBetMatic
     {
         private const string BtcMarket = "BTC-EUR";
         private const string EthMarket = "ETH-EUR";
-
+        private BitvavoApi api;
         public async Task<IActionResult> Process(bool transact = true)
         {
-            var api = new BitvavoApi();
+            api = new BitvavoApi();
             var balances = await api.GetBalances();
             var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
-
 
             var sb = new StringBuilder();
             sb.AppendLine(FormatBalances(balances));
             sb.AppendLine($"\nAgressive advice:\n");
-            
-            var markets = new List<string> { BtcMarket, EthMarket };
+
+            var markets = GetMarkets(false);
+            var analyses = new Dictionary<string, (BuySellHold Signal, int Score)>();
 
             foreach (var market in markets)
             {
-                var analyse = ProcessforToken(api, market, true, transact).Result;
-                var tokenBalance = balances.FirstOrDefault(x => x.symbol == GetSymbolFormMarket(market));
+                var analysis = await ProcessforToken(api, market, false, transact);
+                analyses.Add(market, analysis);
+            }
 
-                var outcome = await TransactOutcome(api, analyse.Score, analyse.Signal, euroBalance, tokenBalance, market, transact);
+            // Sort analyses: Hold first, then Sell, then Buy
+            var orderedAnalyses = analyses
+                .OrderBy(x => x.Value.Signal == BuySellHold.Hold ? 0 : (x.Value.Signal == BuySellHold.Sell ? 1 : 2)).Select(x => (market: x.Key, analysis: x.Value))
+                .ToList();
+
+            // First execute all sell orders
+            foreach (var analysis in orderedAnalyses)
+            {
+                var tokenBalance = balances.FirstOrDefault(x => x.symbol == GetSymbolFormMarket(analysis.market));
+                var outcome = await TransactOutcome(api, analysis.analysis.Score, analysis.analysis.Signal, euroBalance, tokenBalance, analysis.market, transact);
+
+                if (analysis.analysis.Signal == BuySellHold.Buy || analysis.analysis.Signal == BuySellHold.Sell)
+                {
+                    // Update balances after each order
+                    balances = await api.GetBalances();
+                    euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
+                }
+
                 sb.AppendLine($"{outcome}");
             }
 
             return new OkObjectResult(sb.ToString());
         }
 
-        public async Task<(BuySellHold Signal, int Score)> ProcessforToken(BitvavoApi api, string market, bool agressive, bool transact = true)
+
+        private async Task<(BuySellHold Signal, int Score)> ProcessforToken(BitvavoApi api, string market, bool agressive, bool transact = true)
         {
             var tradingStrategy = new TradingStrategy(api);
 
-            var analyse = agressive ? await tradingStrategy.AnalyzeMarket(market) : await tradingStrategy.AnalyzeMarketModerate(market);
+            var analyse = agressive ? await tradingStrategy.AnalyzeMarketAgressive(market) : await tradingStrategy.AnalyzeMarket(market);
 
             return analyse;
-        }
-
-        private static string FormatBalances(List<Balance> balances)
-        {
-            var balanceString = new StringBuilder();
-            balanceString.AppendLine($"Balances available:");
-
-            foreach (var balance in balances)
-            {
-                balanceString.AppendLine($"{balance.available} {balance.symbol}");
-            }
-
-            return balanceString.ToString();
         }
 
         private static async Task<string> TransactOutcome(BitvavoApi api, int score, BuySellHold outcome, Balance euroBalance, Balance tokenBalance, string market, bool transact)
@@ -78,11 +85,11 @@ namespace BitBetMatic
                     {
                         if (minOrderAmount > euroBalanced)
                         {
-                            action = $"Holding: Can't buy {euroBalanced.ToString("F2")} of {market}, because euro balance is lower than minimum ordersize";
+                            action = $"Holding: Can't buy {euroBalanced:F2} of {market}, because euro balance is lower than minimum ordersize";
                             break;
                         }
                         var amount = Functions.GetHigher(euroPercentageAmount, minOrderAmount);
-                        action = $"Buying {amount.ToString("F2")} euro worth of {market}";
+                        action = $"Buying {amount:F2} euro worth of {market}";
                         if (transact)
                         {
                             await api.Buy(market, amount);
@@ -93,11 +100,11 @@ namespace BitBetMatic
                     {
                         if (minOrderAmount > tokenBalanced)
                         {
-                            action = $"Holding: Can't sell {tokenBalanced.ToString("F2")} of {market}, because token balance is lower than minimum ordersize.";
+                            action = $"Holding: Can't sell {tokenBalanced:F2} of {market}, because token balance is lower than minimum ordersize";
                             break;
                         }
                         var amount = Functions.GetHigher(tokenPercentageAmount, minOrderAmount);
-                        action = $"Selling {amount.ToString("F2")} euro worth of {market}";
+                        action = $"Selling {amount:F2} euro worth of {market}";
                         if (transact)
                         {
                             await api.Sell(market, amount);
@@ -105,13 +112,38 @@ namespace BitBetMatic
                     }
                     break;
                 default:
-                    action = $"Holding {tokenBalanced.ToString("F2")} of {market}";
+                    action = $"Holding {tokenBalanced:F2} of {market}";
                     break;
             }
 
             Console.WriteLine(action);
 
             return $"{action}, at a score of {score}";
+        }
+
+        private List<string> GetMarkets(bool top10)
+        {
+            var markets = new List<string> { BtcMarket, EthMarket };
+            if (top10)
+            {
+                var marketsResult = api.GetMarkets().Result.OrderByDescending(x => x.Quote.Volume).Take(10);
+                markets = marketsResult.Select(x => $"{x.Base.Symbol}-EUR").ToList();
+            }
+
+            return markets;
+        }
+
+        private static string FormatBalances(List<Balance> balances)
+        {
+            var balanceString = new StringBuilder();
+            balanceString.AppendLine($"Balances available:");
+
+            foreach (var balance in balances)
+            {
+                balanceString.AppendLine($"{balance.available} {balance.symbol}");
+            }
+
+            return balanceString.ToString();
         }
 
         private string GetSymbolFormMarket(string market)

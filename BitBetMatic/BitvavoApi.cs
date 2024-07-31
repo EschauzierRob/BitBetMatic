@@ -202,6 +202,24 @@ namespace BitBetMatic
                 throw new Exception($"Error retrieving market info: {response.Content}");
             }
         }
+        
+        public async Task<List<MarketData>> GetMarkets()
+        {
+            var client = new RestClient("https://edge.bitvavo.com");
+            var request = new RestRequest("exchange/proxy/v3/markets/data", Method.Get);
+            request.AddParameter("miniChart", "false");
+
+            var response = await client.ExecuteAsync(request);
+
+            if (!response.IsSuccessful)
+            {
+                throw new Exception($"Error retrieving market data: {response.Content}");
+            }
+
+            var marketDataList = JsonConvert.DeserializeObject<List<MarketData>>(response.Content);
+            return marketDataList;
+        }
+
 
         private string FormatAmount(decimal amount, int precision)
         {

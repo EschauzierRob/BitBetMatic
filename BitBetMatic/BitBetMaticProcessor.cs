@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -21,14 +20,14 @@ namespace BitBetMatic
 
             var sb = new StringBuilder();
             sb.AppendLine(FormatBalances(balances));
-            sb.AppendLine($"\nAgressive advice:\n");
+            sb.AppendLine($"\nTrading advice:\n");
 
             var markets = GetMarkets(false);
             var analyses = new Dictionary<string, (BuySellHold Signal, int Score)>();
 
             foreach (var market in markets)
             {
-                var analysis = await ProcessforToken(api, market, false, transact);
+                var analysis = await ProcessforToken(api, market);
                 analyses.Add(market, analysis);
             }
 
@@ -57,11 +56,11 @@ namespace BitBetMatic
         }
 
 
-        private async Task<(BuySellHold Signal, int Score)> ProcessforToken(BitvavoApi api, string market, bool agressive, bool transact = true)
+        private async Task<(BuySellHold Signal, int Score)> ProcessforToken(BitvavoApi api, string market)
         {
             var tradingStrategy = new TradingStrategy(api);
 
-            var analyse = agressive ? await tradingStrategy.AnalyzeMarketAgressive(market) : await tradingStrategy.AnalyzeMarket(market);
+            var analyse = await tradingStrategy.AnalyzeMarketWithStopLoss(market);
 
             return analyse;
         }

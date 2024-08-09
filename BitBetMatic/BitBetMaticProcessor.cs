@@ -1,5 +1,4 @@
 using BitBetMatic.API;
-using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,20 +20,16 @@ namespace BitBetMatic
         private BitvavoApi api;
         private DataLoader dataLoader;
         private PortfolioManager portfolioManager;
-        public async Task<string> Process(bool transact = true)
+        public async Task<string> RunStrategies(ITradingStrategy btcStrategy, ITradingStrategy ethStrategy, bool transact = true)
         {
-            api = new BitvavoApi();
             portfolioManager = new PortfolioManager();
 
             var sb = new StringBuilder();
             sb.AppendLine($"\nTrading advice:\n");
 
-            var markets = GetMarkets(false);
-            // await EnactStrategy(transact, sb, markets, new ModerateStrategy());
-            // await EnactStrategy(transact, sb, markets, new AgressiveStrategy());
-            // await EnactStrategy(transact, sb, markets, new ScoredStrategy());
-            await EnactStrategy(transact, sb, new List<string>{BtcMarket}, new StoplossStrategy());
-            await EnactStrategy(transact, sb, new List<string>{EthMarket}, new AdvancedStrategy());
+            // var markets = GetMarkets(false);
+            await EnactStrategy(transact, sb, new List<string>{BtcMarket}, btcStrategy);
+            await EnactStrategy(transact, sb, new List<string>{EthMarket}, ethStrategy);
 
             string result = sb.ToString();
             Console.Write(result);
@@ -101,13 +96,17 @@ namespace BitBetMatic
             }
         }
 
-        public async Task<string> RunBacktest(ITradingStrategy strategy, string market)
+        public async Task<(ITradingStrategy strategy, decimal result, string resultText)> RunBacktest(ITradingStrategy strategy, string market)
         {
             portfolioManager = new PortfolioManager();
             portfolioManager.SetCash(300);
             var strategyExecutor = new StrategyExecutor(strategy);
 
-            var historicalData = await dataLoader.LoadHistoricalData(market, "1h", 1440, DateTime.Today.AddMonths(-1), DateTime.Today);
+            DateTime start = DateTime.Today.AddDays(-10);
+            DateTime end = DateTime.Today;
+            // DateTime start = new DateTime(2024,03,14);
+            // DateTime end = new DateTime(2024,05,14);
+            var historicalData = await dataLoader.LoadHistoricalData(market, "1h", 1440, start, end);
             var tradeActions = strategyExecutor.ExecuteStrategy(market, historicalData, portfolioManager);
 
             foreach (var action in tradeActions)
@@ -116,7 +115,44 @@ namespace BitBetMatic
             }
 
             var resultAnalyzer = new ResultAnalyzer(strategy, tradeActions, portfolioManager);
-            return resultAnalyzer.Analyze();
+            return (strategy, portfolioManager.GetAccountTotal(), resultAnalyzer.Analyze());
+        }
+
+        public async Task<(ITradingStrategy strategyBtc, ITradingStrategy strategyEth, string result)> RunBacktesting(StringBuilder sb)
+        {
+            sb.AppendLine("BTC backtesting:");
+            var strategyBtc = await GetMostPerformantStrategy(sb, BtcMarket);
+
+            sb.AppendLine("ETH backtesting:");
+            var strategyEth = await GetMostPerformantStrategy(sb, EthMarket);
+
+            string result = sb.ToString();
+            Console.Write(result);
+            return (strategyBtc, strategyEth, result);
+        }
+
+        private async Task<ITradingStrategy> GetMostPerformantStrategy(StringBuilder sb, string market)
+        {
+            List<ITradingStrategy> strategies = new List<ITradingStrategy>
+            {
+                new ModerateStrategy(),
+                new AgressiveStrategy(),
+                new ScoredStrategy(),
+                new StoplossStrategy(),
+                new AdvancedStrategy()
+                };
+            (ITradingStrategy strategy, decimal total) res = (strategies.First(), decimal.Zero);
+
+            foreach (var strat in strategies)
+            {
+                var testRes = await RunBacktest(strat, market);
+                sb.AppendLine(testRes.resultText);
+                if (res.total < testRes.result)
+                {
+                    res = (testRes.strategy, testRes.result);
+                }
+            }
+            return res.strategy;
         }
 
 

@@ -4,6 +4,7 @@ using BitBetMatic;
 public class PortfolioManager
 {
     private decimal _cashBalance;
+    private decimal tradeMargin = (decimal)0.9975;
     private Dictionary<string, (decimal tokenAmount, decimal currentPrice)> _assetBalances;
 
     public PortfolioManager()
@@ -25,12 +26,12 @@ public class PortfolioManager
         }
         if (action.Action == BuySellHold.Buy && _cashBalance >= tokenAmount)
         {
-            AddToTokenBalance(action, tokenAmount);
+            AddToTokenBalance(action, tokenAmount*tradeMargin);
             _cashBalance -= action.AmountInEuro;
         }
         else if (action.Action == BuySellHold.Sell && _assetBalances.ContainsKey(action.Market) && _assetBalances[action.Market].tokenAmount >= tokenAmount)
         {
-            _cashBalance += action.AmountInEuro;
+            _cashBalance += action.AmountInEuro*tradeMargin;
             TakeFromTokenBalance(action, tokenAmount);
         }
     }

@@ -36,9 +36,23 @@ public class StrategyExecutor
             };
             actions.Add(tradeAction);
 
+            //Special case: if we use the HoldStrategy, we only want to buy 100% into the token at the start, and then just hold forever :D
+            if (_strategy.GetType() == typeof(HoldStrategy) && portfolioManager.GetCashBalance() == 300)
+            {
+                tradeAction = new TradeAction
+                {
+                    Market = market,
+                    AmountInEuro = 300,
+                    Action = BuySellHold.Buy,
+                    CurrentTokenPrice = currentPrice,
+                    Timestamp = candle.Last().Date
+                };
+            }
+
             // Execute the trade and update the portfolio state
             portfolioManager.ExecuteTrade(tradeAction);
         }
+        portfolioManager.SetTokenCurrentPrice(market, data.Last().Close);
 
         return actions;
     }

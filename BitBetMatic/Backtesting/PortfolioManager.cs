@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using BitBetMatic;
@@ -26,12 +27,12 @@ public class PortfolioManager
         }
         if (action.Action == BuySellHold.Buy && _cashBalance >= tokenAmount)
         {
-            AddToTokenBalance(action, tokenAmount*tradeMargin);
+            AddToTokenBalance(action, tokenAmount * tradeMargin);
             _cashBalance -= action.AmountInEuro;
         }
         else if (action.Action == BuySellHold.Sell && _assetBalances.ContainsKey(action.Market) && _assetBalances[action.Market].tokenAmount >= tokenAmount)
         {
-            _cashBalance += action.AmountInEuro*tradeMargin;
+            _cashBalance += action.AmountInEuro * tradeMargin;
             TakeFromTokenBalance(action, tokenAmount);
         }
     }
@@ -56,4 +57,9 @@ public class PortfolioManager
     public decimal GetAssetEuroBalance(string market) => _assetBalances.ContainsKey(market) ? GetAssetTokenBalance(market) * _assetBalances[market].currentPrice : 0;
 
     public decimal GetAccountTotal() => _assetBalances.Sum(x => GetAssetEuroBalance(x.Key)) + GetCashBalance();
+
+    public void SetTokenCurrentPrice(string market, decimal close)
+    {
+        _assetBalances[market] = (_assetBalances[market].tokenAmount, close);
+    }
 }

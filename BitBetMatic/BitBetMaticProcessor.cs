@@ -28,8 +28,8 @@ namespace BitBetMatic
             sb.AppendLine($"\nTrading advice:\n");
 
             // var markets = GetMarkets(false);
-            await EnactStrategy(transact, sb, new List<string>{BtcMarket}, btcStrategy);
-            await EnactStrategy(transact, sb, new List<string>{EthMarket}, ethStrategy);
+            await EnactStrategy(transact, sb, new List<string> { BtcMarket }, btcStrategy);
+            await EnactStrategy(transact, sb, new List<string> { EthMarket }, ethStrategy);
 
             string result = sb.ToString();
             Console.Write(result);
@@ -96,13 +96,13 @@ namespace BitBetMatic
             }
         }
 
-        public async Task<(ITradingStrategy strategy, decimal result, string resultText)> RunBacktest(ITradingStrategy strategy, string market)
+        private async Task<(ITradingStrategy strategy, decimal result, string resultText)> RunBacktest(ITradingStrategy strategy, string market)
         {
             portfolioManager = new PortfolioManager();
             portfolioManager.SetCash(300);
             var strategyExecutor = new StrategyExecutor(strategy);
 
-            DateTime start = DateTime.Today.AddDays(-10);
+            DateTime start = DateTime.Today.AddDays(-60);
             DateTime end = DateTime.Today;
             // DateTime start = new DateTime(2024,03,14);
             // DateTime end = new DateTime(2024,05,14);
@@ -139,7 +139,8 @@ namespace BitBetMatic
                 new AgressiveStrategy(),
                 new ScoredStrategy(),
                 new StoplossStrategy(),
-                new AdvancedStrategy()
+                new AdvancedStrategy(),
+                new HoldStrategy()
                 };
             (ITradingStrategy strategy, decimal total) res = (strategies.First(), decimal.Zero);
 

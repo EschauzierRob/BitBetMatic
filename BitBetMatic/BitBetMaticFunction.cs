@@ -22,11 +22,11 @@ namespace BitBetMatic
             var backtestResult = await bitBetMaticProcessor.RunBacktesting(sb);
             var chosenStrategies = $"backtestResult: btcStrategy: {backtestResult.strategyBtc.GetType()}, ethStrategy: {backtestResult.strategyEth.GetType()}";
             Console.WriteLine(chosenStrategies);
-            // var processResult = await bitBetMaticProcessor.RunStrategies(backtestResult.strategyBtc, backtestResult.strategyEth, false);
+            var processResult = await bitBetMaticProcessor.RunStrategies(backtestResult.strategyBtc, backtestResult.strategyEth, false);
             log.LogInformation(backtestResult.result);
 
             // return result;
-            return new OkObjectResult(backtestResult + "\n\n" + chosenStrategies);
+            return new OkObjectResult(backtestResult + "\n\n" + chosenStrategies + "\n\n" + processResult);
         }
     }
 

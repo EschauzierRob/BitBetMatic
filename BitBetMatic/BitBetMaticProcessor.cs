@@ -10,25 +10,36 @@ namespace BitBetMatic
 {
     public class BitBetMaticProcessor
     {
-        private const string BtcMarket = "BTC-EUR";
-        private const string EthMarket = "ETH-EUR";
-        private BitvavoApi api;
-        public async Task<IActionResult> Process(bool transact = true)
+        public BitBetMaticProcessor()
         {
             api = new BitvavoApi();
+            dataLoader = new DataLoader(api);
+        }
+
+        public const string BtcMarket = "BTC-EUR";
+        public const string EthMarket = "ETH-EUR";
+        private BitvavoApi api;
+        private DataLoader dataLoader;
+        private PortfolioManager portfolioManager;
+        public async Task<string> Process(bool transact = true)
+        {
+            api = new BitvavoApi();
+            portfolioManager = new PortfolioManager();
 
             var sb = new StringBuilder();
-            // sb.AppendLine(FormatBalances(balances));
             sb.AppendLine($"\nTrading advice:\n");
 
             var markets = GetMarkets(false);
-            await EnactStrategy(transact, sb, markets, new ModerateStrategy(api));
-            await EnactStrategy(transact, sb, markets, new AgressiveStrategy(api));
-            await EnactStrategy(transact, sb, markets, new ScoredStrategy(api));
-            await EnactStrategy(transact, sb, markets, new StoplossStrategy(api));
-            await EnactStrategy(transact, sb, markets, new AdvancedStrategy(api));
+            // await EnactStrategy(transact, sb, markets, new ModerateStrategy());
+            // await EnactStrategy(transact, sb, markets, new AgressiveStrategy());
+            // await EnactStrategy(transact, sb, markets, new ScoredStrategy());
+            await EnactStrategy(transact, sb, new List<string>{BtcMarket}, new StoplossStrategy());
+            await EnactStrategy(transact, sb, new List<string>{EthMarket}, new AdvancedStrategy());
 
-            return new OkObjectResult(sb.ToString());
+            string result = sb.ToString();
+            Console.Write(result);
+
+            return result;
         }
 
         private async Task EnactStrategy(bool transact, StringBuilder sb, List<string> markets, ITradingStrategy strategy)
@@ -41,7 +52,9 @@ namespace BitBetMatic
 
             foreach (var market in markets)
             {
-                var analysis = await strategy.AnalyzeMarket(market);
+                var quotes = await api.GetCandleData(market, strategy.Interval(), strategy.Limit());
+                var currentPrice = await api.GetPrice(market);
+                var analysis = strategy.AnalyzeMarket(market, quotes, currentPrice);
                 analyses.Add(market, analysis);
             }
 
@@ -53,8 +66,16 @@ namespace BitBetMatic
             // First execute all sell orders
             foreach (var analysis in orderedAnalyses)
             {
-                var tokenBalance = balances.FirstOrDefault(x => x.symbol == GetSymbolFormMarket(analysis.market));
-                var outcome = await TransactOutcome(api, analysis.analysis.Score, analysis.analysis.Signal, euroBalance, tokenBalance, analysis.market, transact);
+                var tokenBalance = balances.FirstOrDefault(x => x.symbol == Functions.GetSymbolFormMarket(analysis.market));
+                portfolioManager.SetCash(euroBalance.available);
+                var price = await api.GetPrice(analysis.market);
+                portfolioManager.SetTokenBalance(analysis.market, tokenBalance.available, price);
+                var outcome = strategy.CalculateOutcome(price, analysis.analysis.Score, analysis.analysis.Signal, portfolioManager, analysis.market);
+                sb.AppendLine($" - {outcome.action}, at a score of {analysis.analysis.Score}");
+                if (transact)
+                {
+                    await ProcessOrdering((analysis.analysis.Signal, outcome.amount, analysis.market));
+                }
 
                 if (analysis.analysis.Signal == BuySellHold.Buy || analysis.analysis.Signal == BuySellHold.Sell)
                 {
@@ -63,64 +84,41 @@ namespace BitBetMatic
                     euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
                 }
 
-                sb.AppendLine($"{outcome}");
             }
         }
 
-        private static async Task<string> TransactOutcome(IApiWrapper api, int score, BuySellHold outcome, Balance euroBalance, Balance tokenBalance, string market, bool transact)
+        private async Task ProcessOrdering((BuySellHold signal, decimal price, string market) outcome)
         {
-            string action;
-            var price = await api.GetPrice(market);
-            var percentagePerScore = Functions.ToDecimal(score / 1000d);
-
-            var tokenBalanced = (tokenBalance?.available ?? 0) * price;
-            var euroBalanced = euroBalance?.available ?? 0;
-
-            var euroPercentageAmount = euroBalanced * percentagePerScore;
-            var tokenPercentageAmount = tokenBalanced * percentagePerScore;
-            var minOrderAmount = Functions.ToDecimal(5);
-
-            switch (outcome)
+            switch (outcome.signal)
             {
                 case BuySellHold.Buy:
-                    {
-                        if (minOrderAmount > euroBalanced)
-                        {
-                            action = $"Holding: Can't buy {euroBalanced:F2} of {market}, because euro balance is lower than minimum ordersize";
-                            break;
-                        }
-                        var amount = Functions.GetHigher(euroPercentageAmount, minOrderAmount);
-                        action = $"Buying {amount:F2} euro worth of {market}";
-                        if (transact)
-                        {
-                            await api.Buy(market, amount);
-                        }
-                    }
+                    await api.Buy(outcome.market, outcome.price);
                     break;
                 case BuySellHold.Sell:
-                    {
-                        if (minOrderAmount > tokenBalanced)
-                        {
-                            action = $"Holding: Can't sell {tokenBalanced:F2} of {market}, because token balance is lower than minimum ordersize";
-                            break;
-                        }
-                        var amount = Functions.GetHigher(tokenPercentageAmount, minOrderAmount);
-                        action = $"Selling {amount:F2} euro worth of {market}";
-                        if (transact)
-                        {
-                            await api.Sell(market, amount);
-                        }
-                    }
+                    await api.Sell(outcome.market, outcome.price);
                     break;
-                default:
-                    action = $"Holding {tokenBalanced:F2} of {market}";
-                    break;
+                default: break;
+            }
+        }
+
+        public async Task<string> RunBacktest(ITradingStrategy strategy, string market)
+        {
+            portfolioManager = new PortfolioManager();
+            portfolioManager.SetCash(300);
+            var strategyExecutor = new StrategyExecutor(strategy);
+
+            var historicalData = await dataLoader.LoadHistoricalData(market, "1h", 1440, DateTime.Today.AddMonths(-1), DateTime.Today);
+            var tradeActions = strategyExecutor.ExecuteStrategy(market, historicalData, portfolioManager);
+
+            foreach (var action in tradeActions)
+            {
+                portfolioManager.ExecuteTrade(action);
             }
 
-            Console.WriteLine(action);
-
-            return $"{action}, at a score of {score}";
+            var resultAnalyzer = new ResultAnalyzer(strategy, tradeActions, portfolioManager);
+            return resultAnalyzer.Analyze();
         }
+
 
         private List<string> GetMarkets(bool top10)
         {
@@ -145,11 +143,6 @@ namespace BitBetMatic
             }
 
             return balanceString.ToString();
-        }
-
-        private string GetSymbolFormMarket(string market)
-        {
-            return market.Substring(0, 3);
         }
     }
 }

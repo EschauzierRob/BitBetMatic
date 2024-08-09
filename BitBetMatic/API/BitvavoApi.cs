@@ -78,14 +78,29 @@ namespace BitBetMatic.API
             }
         }
 
-        public async Task<List<Quote>> GetCandleData(string market, string interval = "1h", string limit = "100")
+        public async Task<List<Quote>> GetCandleData(string market, string interval, int limit, DateTime? start = null, DateTime? end = null)
         {
+
             try
             {
                 Console.WriteLine($"Requesting BitVavo GET candels endpoint for market {market}");
                 var request = new RestRequest($"{market}/candles", Method.Get);
                 request.AddParameter("interval", interval);
                 request.AddParameter("limit", limit);
+
+                if (start.HasValue)
+                {
+                    DateTimeOffset dto = new DateTimeOffset(start.Value);
+                    var startMilis = dto.ToUnixTimeMilliseconds().ToString();
+                    request.AddParameter("start", startMilis);
+                }
+                if (end.HasValue)
+                {
+                    DateTimeOffset dto = new DateTimeOffset(end.Value);
+                    var endMilis = dto.ToUnixTimeMilliseconds().ToString();
+                    request.AddParameter("end", endMilis);
+                }
+
                 var response = await Client.ExecuteAsync(request);
                 var candles = JsonConvert.DeserializeObject<dynamic>(response.Content);
 
@@ -202,7 +217,7 @@ namespace BitBetMatic.API
                 throw new Exception($"Error retrieving market info: {response.Content}");
             }
         }
-        
+
         public async Task<List<MarketData>> GetMarkets()
         {
             var client = new RestClient("https://edge.bitvavo.com");

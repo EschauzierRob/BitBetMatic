@@ -1,6 +1,7 @@
 using BitBetMatic.API;
 using Skender.Stock.Indicators;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -8,13 +9,8 @@ namespace BitBetMatic
 {
     public class ModerateStrategy : TradingStrategyBase
     {
-        public ModerateStrategy(BitvavoApi api) : base(api) { }
-
-        public override async Task<(BuySellHold Signal, int Score)> AnalyzeMarket(string market)
+        public override (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<Quote> quotes, decimal currentPrice)
         {
-            var quotes = await Api.GetCandleData(market, "1h", "200");
-            var currentPrice = await Api.GetPrice(market);
-
             // Calculate Indicators
             var ema200 = quotes.GetEma(200).LastOrDefault();
             var rsi = quotes.GetRsi(14).LastOrDefault();
@@ -60,5 +56,8 @@ namespace BitBetMatic
 
             return (signal, score);
         }
+        public override string Interval() => "1h";
+
+        public override int Limit() => 200;
     }
 }

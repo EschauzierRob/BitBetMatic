@@ -8,5 +8,6 @@ namespace BitBetMatic
 
         public static decimal GetLower(decimal a, decimal b) => a > b ? b : a;
         public static decimal GetHigher(decimal a, decimal b) => a < b ? b : a;
+        public static string GetSymbolFormMarket(string market) => market.Substring(0, 3);
     }
 }

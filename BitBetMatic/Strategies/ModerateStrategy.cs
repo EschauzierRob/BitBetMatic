@@ -1,22 +1,38 @@
-using BitBetMatic.API;
 using Skender.Stock.Indicators;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace BitBetMatic
 {
     public class ModerateStrategy : TradingStrategyBase
     {
+        public ModerateStrategy()
+        {
+            Thresholds = new IndicatorThresholds
+            {
+                SmaLongTerm = 200,
+                RsiPeriod = 14,
+                RsiOverbought = 70,
+                RsiOversold = 30,
+                MacdFastPeriod = 12,
+                MacdSlowPeriod = 26,
+                MacdSignalPeriod = 9,
+                BollingerBandsPeriod = 20,
+                BollingerBandsDeviation = 2.0d,
+                RocPeriod = 14,
+                BuyThreshold = 50,
+                SellThreshold = -50
+            };
+        }
         public override (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<Quote> quotes, decimal currentPrice)
         {
-            // Calculate Indicators
-            var ema200 = quotes.GetEma(200).LastOrDefault();
-            var rsi = quotes.GetRsi(14).LastOrDefault();
-            var macd = quotes.GetMacd().LastOrDefault();
-            var bb = quotes.GetBollingerBands().LastOrDefault();
-            var roc = quotes.GetRoc(14).LastOrDefault(); // Calculate momentum
+            // Bereken Indicatoren
+            var ema200 = quotes.GetEma(Thresholds.SmaLongTerm).LastOrDefault(); // Gebruik Thresholds waarde voor lange termijn EMA
+            var rsi = quotes.GetRsi(Thresholds.RsiPeriod).LastOrDefault(); // Gebruik Thresholds waarde voor RSI
+            var macd = quotes.GetMacd(Thresholds.MacdFastPeriod, Thresholds.MacdSlowPeriod, Thresholds.MacdSignalPeriod).LastOrDefault(); // Gebruik Thresholds voor MACD
+            var bb = quotes.GetBollingerBands(Thresholds.BollingerBandsPeriod, Thresholds.BollingerBandsDeviation).LastOrDefault(); // Gebruik Thresholds voor Bollinger Bands
+            var roc = quotes.GetRoc(Thresholds.RocPeriod).LastOrDefault(); // Gebruik Thresholds waarde voor ROC (Momentum)
 
             if (ema200 == null || rsi == null || macd == null || bb == null || roc == null)
             {
@@ -27,13 +43,13 @@ namespace BitBetMatic
             var signal = BuySellHold.Hold;
 
             // RSI Scoring
-            if (rsi.Rsi < 30)
-                score += (int)((30 - rsi.Rsi) / 30 * 100);
-            else if (rsi.Rsi > 70)
-                score += (int)((rsi.Rsi - 70) / 30 * 100);
+            if (rsi.Rsi < Thresholds.RsiOversold)
+                score += (int)((Thresholds.RsiOversold - rsi.Rsi) / Thresholds.RsiOversold * 100);
+            else if (rsi.Rsi > Thresholds.RsiOverbought)
+                score += (int)((rsi.Rsi - Thresholds.RsiOverbought) / (100 - Thresholds.RsiOverbought) * 100);
 
             // MACD Scoring
-            score += (int)(Math.Abs(Functions.ToDecimal(macd.Histogram)) / 100 * 100); // Adjust this factor based on typical MACD values for your data
+            score += (int)(Math.Abs(Functions.ToDecimal(macd.Histogram)) / 100 * 100); // Pas deze factor aan op basis van typische MACD-waarden
 
             // Bollinger Bands Scoring
             if (currentPrice < Functions.ToDecimal(bb.LowerBand))
@@ -48,16 +64,17 @@ namespace BitBetMatic
                 score += (int)((Functions.ToDecimal(ema200.Ema) - currentPrice) / Functions.ToDecimal(ema200.Ema) * 100);
 
             // ROC (Momentum) Scoring
-            score += (int)(Math.Abs(Functions.ToDecimal(roc.Roc)) / 100 * 100); // Adjust this factor based on typical ROC values for your data
+            score += (int)(Math.Abs(Functions.ToDecimal(roc.Roc)) / 100 * 100); // Pas deze factor aan op basis van typische ROC-waarden
 
-            // Determine Signal
-            if (score >= 50)
+            // Bepaal Signaal
+            if (score >= Thresholds.BuyThreshold)
                 signal = currentPrice > Functions.ToDecimal(ema200.Ema) ? BuySellHold.Buy : BuySellHold.Sell;
 
             return (signal, score);
         }
+
         public override string Interval() => "1h";
 
-        public override int Limit() => 200;
+        public override int Limit() => Thresholds.SmaLongTerm; // Gebruik de Thresholds waarde voor limiet
     }
 }

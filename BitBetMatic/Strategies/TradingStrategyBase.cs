@@ -8,9 +8,11 @@ namespace BitBetMatic
     {
         public abstract string Interval();
         public abstract int Limit();
-
+        public IndicatorThresholds Thresholds {get;set;}
+        
         public TradingStrategyBase()
         {
+            Thresholds =new IndicatorThresholds(); 
         }
 
         public abstract (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<Quote> quotes, decimal currentPrice);

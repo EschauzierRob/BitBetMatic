@@ -7,16 +7,40 @@ namespace BitBetMatic
 {
     public class AgressiveStrategy : TradingStrategyBase, ITradingStrategy
     {
+        public AgressiveStrategy()
+        {
+            Thresholds = new IndicatorThresholds
+            {
+                SmaShortTerm = 50,
+                SmaLongTerm = 200,
+                RsiPeriod = 14,
+                RsiOverbought = 70,
+                RsiOversold = 30,
+                MacdFastPeriod = 12,
+                MacdSlowPeriod = 26,
+                MacdSignalPeriod = 9,
+                BollingerBandsPeriod = 20,
+                BollingerBandsDeviation = 2.0d,
+                StochasticPeriod = 14,
+                StochasticSignalPeriod = 3,
+                StochasticOverbought = 80,
+                StochasticOversold = 20,
+                AdxPeriod = 14,
+                AdxStrongTrend = 25,
+                BuyThreshold = 50,
+                SellThreshold = -50
+            };
+        }
         public override (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<Quote> quotes, decimal currentPrice)
         {
-            // Calculate Indicators
-            var ema50 = quotes.GetEma(50).LastOrDefault();
-            var ema200 = quotes.GetEma(200).LastOrDefault();
-            var rsi = quotes.GetRsi(14).LastOrDefault();
-            var macd = quotes.GetMacd().LastOrDefault();
-            var bb = quotes.GetBollingerBands().LastOrDefault();
-            var stochastic = quotes.GetStoch(14, 3).LastOrDefault();
-            var adx = quotes.GetAdx(14).LastOrDefault();
+            // Bereken Indicatoren
+            var ema50 = quotes.GetEma(Thresholds.SmaShortTerm).LastOrDefault(); // Gebruik de Thresholds waarde voor korte termijn EMA
+            var ema200 = quotes.GetEma(Thresholds.SmaLongTerm).LastOrDefault(); // Gebruik de Thresholds waarde voor lange termijn EMA
+            var rsi = quotes.GetRsi(Thresholds.RsiPeriod).LastOrDefault(); // Gebruik de Thresholds waarde voor RSI
+            var macd = quotes.GetMacd(Thresholds.MacdFastPeriod, Thresholds.MacdSlowPeriod, Thresholds.MacdSignalPeriod).LastOrDefault(); // Gebruik Thresholds voor MACD
+            var bb = quotes.GetBollingerBands(Thresholds.BollingerBandsPeriod, Thresholds.BollingerBandsDeviation).LastOrDefault(); // Gebruik Thresholds voor Bollinger Bands
+            var stochastic = quotes.GetStoch(Thresholds.StochasticPeriod, Thresholds.StochasticSignalPeriod).LastOrDefault(); // Gebruik Thresholds voor Stochastic Oscillator
+            var adx = quotes.GetAdx(Thresholds.AdxPeriod).LastOrDefault(); // Gebruik Thresholds voor ADX
 
             if (ema50 == null || ema200 == null || rsi == null || macd == null || bb == null || stochastic == null || adx == null)
             {
@@ -26,14 +50,14 @@ namespace BitBetMatic
             var score = 0;
             var signal = BuySellHold.Hold;
 
-            // Adjusted RSI Scoring
-            if (rsi.Rsi < 32)
-                score += (int)((32 - rsi.Rsi) / 32 * 100);
-            else if (rsi.Rsi > 70)
-                score += (int)((rsi.Rsi - 70) / 30 * 100);
+            // Aangepaste RSI Scoring
+            if (rsi.Rsi < Thresholds.RsiOversold)
+                score += (int)((Thresholds.RsiOversold - rsi.Rsi) / Thresholds.RsiOversold * 100);
+            else if (rsi.Rsi > Thresholds.RsiOverbought)
+                score += (int)((rsi.Rsi - Thresholds.RsiOverbought) / (100 - Thresholds.RsiOverbought) * 100);
 
             // MACD Scoring
-            score += (int)(Math.Abs(Functions.ToDecimal(macd.Histogram)) / 50 * 100); // Increased sensitivity
+            score += (int)(Math.Abs(Functions.ToDecimal(macd.Histogram)) / 50 * 100); // Verhoogde gevoeligheid voor MACD
 
             // Bollinger Bands Scoring
             if (currentPrice < Functions.ToDecimal(bb.LowerBand))
@@ -50,17 +74,17 @@ namespace BitBetMatic
                 score += (int)((Functions.ToDecimal(ema200.Ema) - currentPrice) / Functions.ToDecimal(ema200.Ema) * 100);
 
             // Stochastic Oscillator Scoring
-            if (stochastic.K < 20)
-                score += (int)((20 - stochastic.K) / 20 * 100);
-            else if (stochastic.K > 80)
-                score += (int)((stochastic.K - 80) / 20 * 100);
+            if (stochastic.K < Thresholds.StochasticOversold)
+                score += (int)((Thresholds.StochasticOversold - stochastic.K) / Thresholds.StochasticOversold * 100);
+            else if (stochastic.K > Thresholds.StochasticOverbought)
+                score += (int)((stochastic.K - Thresholds.StochasticOverbought) / (100 - Thresholds.StochasticOverbought) * 100);
 
             // ADX Scoring
-            if (adx.Adx > 25)
-                score += (int)((adx.Adx - 25) / 75 * 100);
+            if (adx.Adx > Thresholds.AdxStrongTrend)
+                score += (int)((adx.Adx - Thresholds.AdxStrongTrend) / (100 - Thresholds.AdxStrongTrend) * 100);
 
-            // Determine Signal
-            if (score >= 50)
+            // Bepaal Signaal
+            if (score >= Thresholds.BuyThreshold)
                 signal = currentPrice > Functions.ToDecimal(ema200.Ema) ? BuySellHold.Buy : BuySellHold.Sell;
 
             return (signal, score);
@@ -68,6 +92,6 @@ namespace BitBetMatic
 
         public override string Interval() => "15m";
 
-        public override int Limit() => 200;
+        public override int Limit() => Thresholds.SmaLongTerm; // Gebruik de Thresholds waarde voor limiet
     }
 }

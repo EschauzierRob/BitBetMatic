@@ -1,22 +1,34 @@
-using BitBetMatic.API;
 using Skender.Stock.Indicators;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace BitBetMatic
 {
     public class StoplossStrategy : TradingStrategyBase, ITradingStrategy
     {
+        public StoplossStrategy()
+        {
+            Thresholds = new IndicatorThresholds
+            {
+                RsiOverbought = 75,
+                RsiOversold = 25,
+                MacdSignalLine = 0.5m,
+                AtrMultiplier = 2m,
+                SmaLongTerm = 200,
+                BollingerBandsPeriod = 20,
+                BollingerBandsDeviation = 2.0d
+            };
+        }
+
         public override (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<Quote> quotes, decimal currentPrice)
         {
-            // Calculate Indicators
+            // Bereken indicatoren
             var atr = quotes.GetAtr(14).LastOrDefault();
-            var ema200 = quotes.GetEma(200).LastOrDefault();
+            var ema200 = quotes.GetEma(Thresholds.SmaLongTerm).LastOrDefault();
             var rsi = quotes.GetRsi(14).LastOrDefault();
             var macd = quotes.GetMacd().LastOrDefault();
-            var bb = quotes.GetBollingerBands().LastOrDefault();
+            var bb = quotes.GetBollingerBands(Thresholds.BollingerBandsPeriod, Thresholds.BollingerBandsDeviation).LastOrDefault();
 
             if (atr == null || ema200 == null || rsi == null || macd == null || bb == null)
             {
@@ -29,34 +41,46 @@ namespace BitBetMatic
             try
             {
                 // RSI Scoring
-                if (rsi.Rsi < 32)
-                    score += (int)((32 - rsi.Rsi) / 32 * 100);
-                else if (rsi.Rsi > 70)
-                    score += (int)((rsi.Rsi - 70) / 30 * 100);
+                if (rsi.Rsi < Thresholds.RsiOversold)
+                {
+                    score += (int)((Thresholds.RsiOversold - rsi.Rsi) / Thresholds.RsiOversold * 100);
+                }
+                else if (rsi.Rsi > Thresholds.RsiOverbought)
+                {
+                    score += (int)((rsi.Rsi - Thresholds.RsiOverbought) / (100 - Thresholds.RsiOverbought) * 100);
+                }
 
                 // MACD Scoring
-                score += (int)(Math.Abs(Functions.ToDecimal(macd.Histogram)) / 100 * 100);
+                score += (int)Math.Abs(Functions.ToDecimal(macd.Histogram) * Thresholds.MacdSignalLine);
 
                 // Bollinger Bands Scoring
                 if (currentPrice < Functions.ToDecimal(bb.LowerBand))
+                {
                     score += (int)((Functions.ToDecimal(bb.LowerBand) - currentPrice) / Functions.ToDecimal(bb.LowerBand) * 100);
+                }
                 else if (currentPrice > Functions.ToDecimal(bb.UpperBand))
+                {
                     score += (int)((currentPrice - Functions.ToDecimal(bb.UpperBand)) / Functions.ToDecimal(bb.UpperBand) * 100);
+                }
 
                 // EMA200 Cross Scoring
                 if (currentPrice > Functions.ToDecimal(ema200.Ema))
+                {
                     score += (int)((currentPrice - Functions.ToDecimal(ema200.Ema)) / Functions.ToDecimal(ema200.Ema) * 100);
+                }
                 else if (currentPrice < Functions.ToDecimal(ema200.Ema))
+                {
                     score += (int)((Functions.ToDecimal(ema200.Ema) - currentPrice) / Functions.ToDecimal(ema200.Ema) * 100);
+                }
 
-                // Dynamic Stop Loss Calculation
+                // Dynamic Stop Loss Calculation using ATR
                 var atrValue = Functions.ToDecimal(atr.Atr);
-                var stopLossThreshold = currentPrice - (1.5m * atrValue);
+                var stopLossThreshold = currentPrice - (Thresholds.AtrMultiplier * atrValue);
 
                 if (currentPrice < stopLossThreshold)
                 {
                     signal = BuySellHold.Sell;
-                    score = 200; // High score for immediate action
+                    score = 200; // Hoge score voor onmiddellijke actie
                 }
                 else if (score >= 50)
                 {
@@ -70,9 +94,9 @@ namespace BitBetMatic
 
             return (signal, score);
         }
-        
+
         public override string Interval() => "1h";
 
-        public override int Limit() => 200;
+        public override int Limit() => Thresholds.SmaLongTerm;
     }
 }

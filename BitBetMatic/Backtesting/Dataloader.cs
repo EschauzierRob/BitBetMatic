@@ -19,7 +19,6 @@ public class DataLoader
 
     public async Task<List<Quote>> LoadHistoricalData(string market, string interval, int limit, DateTime start, DateTime end)
     {
-        // var end = new System.DateTime(2024, 08, 07, 12, 0, 0);
         List<Quote> quotes = new List<Quote>();
 
         while (quotes.Count == 0 || end.Date > start.Date)

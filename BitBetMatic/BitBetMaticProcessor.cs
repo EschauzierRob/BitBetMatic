@@ -104,8 +104,8 @@ namespace BitBetMatic
 
             DateTime start = DateTime.Today.AddDays(-60);
             DateTime end = DateTime.Today;
-            // DateTime start = new DateTime(2024,03,14);
-            // DateTime end = new DateTime(2024,05,14);
+            // DateTime start = new DateTime(2024,01,01);
+            // DateTime end = new DateTime(2024,07,01);
             var historicalData = await dataLoader.LoadHistoricalData(market, "1h", 1440, start, end);
             var tradeActions = strategyExecutor.ExecuteStrategy(market, historicalData, portfolioManager);
 

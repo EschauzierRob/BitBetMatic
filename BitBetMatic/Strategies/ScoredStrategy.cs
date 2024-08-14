@@ -11,19 +11,30 @@ namespace BitBetMatic
         {
             Thresholds = new IndicatorThresholds
             {
+                RsiOverbought = 83,
+                RsiOversold = 16,
+                MacdSignalLine = 0.0m,
+                AtrMultiplier = 1.5m,
+                SmaShortTerm = 50,
+                SmaLongTerm = 216,
+                ParabolicSarStep = 0.02,
+                ParabolicSarMax = 0.2,
+                BollingerBandsPeriod = 16,
+                BollingerBandsDeviation = 2.0520765502082634,
+                AdxStrongTrend = 25.0,
+                StochasticOverbought = 80.0,
+                StochasticOversold = 20.0,
+                BuyThreshold = 40,
+                SellThreshold = -35,
                 RsiPeriod = 14,
-                RsiOverbought = 70,
-                RsiOversold = 30,
-                SmaLongTerm = 200,
-                BollingerBandsPeriod = 20,
-                BollingerBandsDeviation = 2.0d,
+                AtrPeriod = 14,
                 StochasticPeriod = 14,
                 StochasticSignalPeriod = 3,
-                StochasticOverbought = 80,
-                StochasticOversold = 20,
-                AtrPeriod = 14,
-                BuyThreshold = 50,
-                SellThreshold = -50
+                MacdFastPeriod = 8,
+                MacdSlowPeriod = 27,
+                MacdSignalPeriod = 10,
+                AdxPeriod = 14,
+                RocPeriod = 14
             };
         }
         public override (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<Quote> quotes, decimal currentPrice)

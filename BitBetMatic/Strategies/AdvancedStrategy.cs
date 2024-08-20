@@ -12,15 +12,29 @@ namespace BitBetMatic
             Thresholds = new IndicatorThresholds
             {
                 RsiOverbought = 70,
-                RsiOversold = 30,
-                MacdSignalLine = 0m,
+                RsiOversold = 35,
+                MacdSignalLine = 0.0m,
                 AtrMultiplier = 1.5m,
-                SmaLongTerm = 200,
-                BollingerBandsPeriod = 20,
-                BollingerBandsDeviation = 2.0d,
-                AdxStrongTrend = 25,
-                ParabolicSarStep = 0.02d,
-                ParabolicSarMax = 0.2d
+                SmaShortTerm = 50,
+                SmaLongTerm = 186,
+                ParabolicSarStep = 0.02,
+                ParabolicSarMax = 0.2,
+                BollingerBandsPeriod = 18,
+                BollingerBandsDeviation = 2.176496345534262,
+                AdxStrongTrend = 25.0,
+                StochasticOverbought = 80.0,
+                StochasticOversold = 20.0,
+                BuyThreshold = 60,
+                SellThreshold = -47,
+                RsiPeriod = 141,
+                AtrPeriod = 14,
+                StochasticPeriod = 14,
+                StochasticSignalPeriod = 3,
+                MacdFastPeriod = 9,
+                MacdSlowPeriod = 28,
+                MacdSignalPeriod = 7,
+                AdxPeriod = 14,
+                RocPeriod = 11
             };
         }
 

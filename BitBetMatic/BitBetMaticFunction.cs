@@ -43,7 +43,7 @@ namespace BitBetMatic
             var backtestResult = await bitBetMaticProcessor.RunBacktesting(sb);
 
             Console.WriteLine($"backtestResult: btcStrategy: {backtestResult.strategyBtc.GetType()}, ethStrategy: {backtestResult.strategyEth.GetType()}");
-            var processResult = await bitBetMaticProcessor.RunStrategies(backtestResult.strategyBtc, backtestResult.strategyEth, false);
+            var processResult = await bitBetMaticProcessor.RunStrategies(backtestResult.strategyBtc, backtestResult.strategyEth);
             log.LogInformation(backtestResult.result);
             log.LogInformation(processResult);
         }

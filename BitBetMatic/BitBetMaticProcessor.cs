@@ -69,8 +69,10 @@ namespace BitBetMatic
                 PortfolioManager.SetTokenBalance(analysis.market, tokenBalance.available, price);
                 var outcome = strategy.CalculateOutcome(price, analysis.analysis.Score, analysis.analysis.Signal, PortfolioManager, analysis.market);
                 sb.AppendLine($" - {outcome.action}, at a score of {analysis.analysis.Score}");
-                if (transact && outcome.amount>0)
+
+                if (transact && outcome.amount > 0)
                 {
+                    sb.AppendLine($"TRANSACTING: {analysis.analysis.Signal} order for {outcome.amount:F} in {analysis.market} market");
                     await ProcessOrdering((analysis.analysis.Signal, outcome.amount, analysis.market));
                 }
 
@@ -80,7 +82,6 @@ namespace BitBetMatic
                     balances = await api.GetBalances();
                     euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
                 }
-
             }
         }
 
@@ -98,7 +99,7 @@ namespace BitBetMatic
             }
         }
 
-        private async Task<(ITradingStrategy strategy, decimal result, string resultText)> RunBacktest(ITradingStrategy strategy, string market, List<Quote> historicalData)
+        private (ITradingStrategy strategy, decimal result, string resultText) RunBacktest(ITradingStrategy strategy, string market, List<Quote> historicalData)
         {
             var portfolioManager = new PortfolioManager();
             portfolioManager.SetCash(300);
@@ -121,8 +122,8 @@ namespace BitBetMatic
             var strategyBtc = await GetMostPerformantStrategy(sb, BtcMarket);
 
             sb.AppendLine("ETH backtesting:");
-            var strategyEth = await GetMostPerformantStrategy(sb, EthMarket);
-            // string thresholds = JsonConvert.SerializeObject(((AdvancedStrategy)strategyBtc).Thresholds);
+             var strategyEth = await GetMostPerformantStrategy(sb, EthMarket);
+            // string thresholds = JsonConvert.SerializeObject(((StoplossStrategy)strategyBtc).Thresholds);
 
             // sb.AppendLine("Thresholds: ");
             // sb.AppendLine(thresholds);
@@ -150,7 +151,7 @@ namespace BitBetMatic
 
             foreach (var strat in strategies)
             {
-                var testRes = await RunBacktest(strat, market, historicalData);
+                var testRes = RunBacktest(strat, market, historicalData);
                 sb.AppendLine(testRes.resultText);
                 if (res.total < testRes.result)
                 {
@@ -159,23 +160,19 @@ namespace BitBetMatic
             }
             return res.strategy;
         }
-
-        private async Task<List<Quote>> GetHistoricalData(string market)
+        private async Task<List<Quote>> GetHistoricalData(string market, string interval = "1h", DateTime? start = null, DateTime? end = null)
         {
-            DateTime start = DateTime.Today.AddDays(-60);
-            DateTime end = DateTime.Today;
-            // start = new DateTime(2024, 01, 01);
-            // end = new DateTime(2024, 07, 01);
-            var historicalData = await dataLoader.LoadHistoricalData(market, "1h", 1440, start, end);
+            // Voorstel voor meerdere tijdspannes (60 dagen, 180 dagen, 365 dagen)
+            start ??= DateTime.Today.AddDays(-60);
+            end ??= DateTime.Today;
+            var historicalData = await dataLoader.LoadHistoricalData(market, interval, 1440, start.Value, end.Value);
             return historicalData;
         }
+
         private async Task<ITradingStrategy> GetMostPerformantStrategyVariant<TStrat>(StringBuilder sb, string market) where TStrat : TradingStrategyBase, new()
         {
-            var thresholdVariants = GenerateThresholdVariations(new TStrat().Thresholds, 100);
-            List<TradingStrategyBase> strategies = new List<TradingStrategyBase>
-    {
-        new TStrat()
-    };
+            var thresholdVariants = GenerateThresholdVariations(new TStrat().Thresholds, 20);
+            List<TStrat> strategies = new List<TStrat> { new TStrat() };
 
             foreach (var thresholdVariant in thresholdVariants)
             {
@@ -183,17 +180,31 @@ namespace BitBetMatic
             }
 
             (ITradingStrategy strategy, decimal total) res = (strategies.First(), decimal.Zero);
-            List<Quote> historicalData = await GetHistoricalData(market);
 
-            // Gebruik een lijst van Tasks om de resultaten te verzamelen
-            List<Task<(ITradingStrategy strategy, decimal result, string resultText)>> tasks = new List<Task<(ITradingStrategy strategy, decimal result, string resultText)>>();
+            // Gebruik verschillende tijdspannes
+            var historicalDataLong = await GetHistoricalData(market, res.strategy.Interval(), DateTime.Today.AddDays(-365));
+            var historicalDataMedium = historicalDataLong.Where(x => x.Date > DateTime.Today.AddDays(-180)).ToList();
+            var historicalDataShort = historicalDataMedium.Where(x => x.Date > DateTime.Today.AddDays(-30)).ToList();
 
+            List<Task<(TStrat strategy, decimal result, string resultText)>> tasks = new List<Task<(TStrat strategy, decimal result, string resultText)>>();
+
+            // Run backtest for different time spans
             foreach (var strat in strategies)
             {
-                tasks.Add(Task.Run(async () =>
+                tasks.Add(Task.Run(() =>
                 {
-                    var testRes = await RunBacktest(strat, market, historicalData);
-                    return testRes;
+                    // Run backtests on different time frames
+                    var shortTermResult = RunBacktest(strat, market, historicalDataShort);
+                    var mediumTermResult = RunBacktest(strat, market, historicalDataMedium);
+                    var longTermResult = RunBacktest(strat, market, historicalDataLong);
+
+                    // Combineer de resultaten met gewichten voor recentheid (bijv. 50% short, 30% medium, 20% long)
+                    decimal combinedResult = 0.5m * shortTermResult.result + 0.3m * mediumTermResult.result + 0.2m * longTermResult.result;
+
+                    // Combineer de teksten van de resultaten
+                    string combinedText = $"SHORT: {shortTermResult.resultText}\nMEDIUM: {mediumTermResult.resultText}\nLONG: {longTermResult.resultText}\nCombined Result: {combinedResult}";
+
+                    return (strategy: strat, result: combinedResult, resultText: combinedText);
                 }));
             }
 
@@ -219,6 +230,7 @@ namespace BitBetMatic
 
 
 
+
         private IEnumerable<IndicatorThresholds> GenerateThresholdVariations(IndicatorThresholds baseThresholds, int variationCount)
         {
             var random = new Random();
@@ -233,7 +245,7 @@ namespace BitBetMatic
                     RsiOverbought = baseThresholds.RsiOverbought + random.Next(-8, 8),
                     RsiOversold = baseThresholds.RsiOversold + random.Next(-8, 8),
                     MacdFastPeriod = macdFastPeriod,
-                    MacdSlowPeriod = Math.Max(macdFastPeriod+1, macdSlowPeriod),
+                    MacdSlowPeriod = Math.Max(macdFastPeriod + 1, macdSlowPeriod),
                     MacdSignalPeriod = baseThresholds.MacdSignalPeriod + random.Next(-2, 2),
                     BollingerBandsPeriod = baseThresholds.BollingerBandsPeriod + random.Next(-5, 5),
                     BollingerBandsDeviation = baseThresholds.BollingerBandsDeviation + (random.NextDouble() * 0.2d),

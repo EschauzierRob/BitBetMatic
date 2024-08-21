@@ -8,10 +8,10 @@ using Skender.Stock.Indicators;
 
 public class DataLoader
 {
-    private readonly BitvavoApi _api;
+    private readonly IApiWrapper _api;
     private readonly Dictionary<string, List<Quote>> QuotesPerInterval;
 
-    public DataLoader(BitvavoApi api)
+    public DataLoader(IApiWrapper api)
     {
         _api = api;
         QuotesPerInterval = new Dictionary<string, List<Quote>>();
@@ -23,22 +23,22 @@ public class DataLoader
 
         while (quotes.Count == 0 || end.Date > start.Date)
         {
-            if (QuotesPerInterval.ContainsKey(interval+market) && QuotesPerInterval[interval+market].Count > 0)
+            if (QuotesPerInterval.ContainsKey(interval + market) && QuotesPerInterval[interval + market].Count > 0)
             {
-                end = QuotesPerInterval[interval+market].Min(x => x.Date);
+                end = QuotesPerInterval[interval + market].Min(x => x.Date);
             }
             quotes = await _api.GetCandleData(market, interval, limit, start, end);
 
-            if (QuotesPerInterval.ContainsKey(interval+market))
+            if (QuotesPerInterval.ContainsKey(interval + market))
             {
-                QuotesPerInterval[interval+market].AddRange(quotes);
+                QuotesPerInterval[interval + market].AddRange(quotes);
             }
             else
             {
-                QuotesPerInterval[interval+market] = quotes;
+                QuotesPerInterval[interval + market] = quotes;
             }
         }
 
-        return QuotesPerInterval[interval+market];
+        return QuotesPerInterval[interval + market];
     }
 }

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System;
 using System.Text;
+using BitBetMatic.API;
 
 namespace BitBetMatic
 {

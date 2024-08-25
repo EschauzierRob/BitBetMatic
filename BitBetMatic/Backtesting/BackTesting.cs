@@ -55,9 +55,13 @@ public class BackTesting
     {
         sb.AppendLine($"{market} backtesting:");
         var strategy = new TStrat();
+
+        var thresholds = await indicatorThresholdPersistency.GetLatestThresholdsAsync(strategy.GetType().Name, market) ?? strategy.Thresholds;
+        strategy.Thresholds = thresholds;
+
         var (strat, highscore) = await GetMostPerformantStrategyVariant(strategy, sb, market, numberOfVariants);
 
-        if (strategy.Thresholds.Highscore > strat.Thresholds.Highscore)
+        if (highscore > strategy.Thresholds.Highscore)
         {
             strat.Thresholds.Market = market;
             strat.Thresholds.Strategy = strat.GetType().Name;
@@ -65,10 +69,10 @@ public class BackTesting
             await indicatorThresholdPersistency.InsertThresholdsAsync(strat.Thresholds);
         }
 
-        string thresholds = JsonConvert.SerializeObject(((TStrat)strat).Thresholds);
+        string thresholdsWinner = JsonConvert.SerializeObject(((TStrat)strat).Thresholds);
 
         sb.AppendLine("Thresholds: ");
-        sb.AppendLine(thresholds);
+        sb.AppendLine(thresholdsWinner);
 
         string resultString = sb.ToString();
         Console.Write(resultString);
@@ -112,10 +116,7 @@ public class BackTesting
 
     private async Task<(TradingStrategyBase strategy, decimal result)> GetMostPerformantStrategyVariant<TStrat>(TStrat strategy, StringBuilder sb, string market, int numberOfVariants) where TStrat : TradingStrategyBase, new()
     {
-        var thresholds = await indicatorThresholdPersistency.GetLatestThresholdsAsync(strategy.GetType().Name, market) ?? strategy.Thresholds;
-        strategy.Thresholds = thresholds;
-
-        var thresholdVariants = GenerateThresholdVariations(thresholds, numberOfVariants);
+        var thresholdVariants = GenerateThresholdVariations(strategy.Thresholds, numberOfVariants);
         List<TStrat> strategies = new List<TStrat> { strategy };
 
         foreach (var thresholdVariant in thresholdVariants)
@@ -218,12 +219,12 @@ public class BackTesting
                 // MACD thresholds
                 MacdFastPeriod = macdFastPeriod,
                 MacdSlowPeriod = Math.Max(macdFastPeriod + 1, macdSlowPeriod),
-                MacdSignalPeriod = baseThresholds.MacdSignalPeriod + random.Next(-2, 2),
+                MacdSignalPeriod = Math.Max(1, baseThresholds.MacdSignalPeriod + random.Next(-2, 2)),
                 MacdSignalLine = baseThresholds.MacdSignalLine + ((decimal)random.NextDouble() * 0.1m - 0.05m),
 
                 // ATR thresholds
                 AtrMultiplier = baseThresholds.AtrMultiplier + ((decimal)random.NextDouble() * 0.5m - 0.25m),
-                AtrPeriod = baseThresholds.AtrPeriod + random.Next(-3, 3),
+                AtrPeriod = Math.Max(1, baseThresholds.AtrPeriod + random.Next(-3, 3)),
 
                 // SMA thresholds
                 SmaShortTerm = baseThresholds.SmaShortTerm + random.Next(-10, 10),
@@ -239,13 +240,13 @@ public class BackTesting
 
                 // ADX thresholds
                 AdxStrongTrend = baseThresholds.AdxStrongTrend + (random.NextDouble() * 10d - 5d),
-                AdxPeriod = baseThresholds.AdxPeriod + random.Next(-3, 3),
+                AdxPeriod = Math.Max(1, baseThresholds.AdxPeriod + random.Next(-3, 3)),
 
                 // Stochastic thresholds
                 StochasticOverbought = baseThresholds.StochasticOverbought + (random.NextDouble() * 10d - 5d),
                 StochasticOversold = baseThresholds.StochasticOversold + (random.NextDouble() * 10d - 5d),
                 StochasticPeriod = baseThresholds.StochasticPeriod + random.Next(-3, 3),
-                StochasticSignalPeriod = baseThresholds.StochasticSignalPeriod + random.Next(-1, 1),
+                StochasticSignalPeriod = Math.Max(1, baseThresholds.StochasticSignalPeriod + random.Next(-1, 1)),
 
                 // ROC thresholds
                 RocPeriod = baseThresholds.RocPeriod + random.Next(-3, 3),

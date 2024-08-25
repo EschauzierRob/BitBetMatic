@@ -97,7 +97,7 @@ namespace BitBetMatic
             return (signal, score);
         }
 
-        public override string Interval() => "15m";
+        public override string Interval() => "1h";
 
         public override int Limit() => Thresholds.SmaLongTerm; // Gebruik de Thresholds waarde voor limiet
     }

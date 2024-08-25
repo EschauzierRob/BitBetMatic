@@ -3,15 +3,16 @@ using Microsoft.EntityFrameworkCore;
 
 public class TradingDbContext : DbContext
 {
-    public DbSet<IndicatorThresholdsEntity> IndicatorThresholds { get; set; }
+    public DbSet<IndicatorThresholds> IndicatorThresholds { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING");
+        var connectionString = "Server=tcp:bitbetmatic-db.database.windows.net,1433;Initial Catalog=bitbetmatic-db;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=\"Active Directory Default\";";
         if (string.IsNullOrEmpty(connectionString))
         {
             throw new InvalidOperationException("Database connection string is not set.");
         }
+        
         // Verbind met Azure SQL Database
         optionsBuilder.UseSqlServer(connectionString);
     }
@@ -21,7 +22,7 @@ public class TradingDbContext : DbContext
         base.OnModelCreating(modelBuilder);
 
         // Indexen voor betere query-prestaties
-        modelBuilder.Entity<IndicatorThresholdsEntity>()
+        modelBuilder.Entity<IndicatorThresholds>()
             .HasIndex(e => new { e.Strategy, e.Market, e.CreatedAt });
     }
 }

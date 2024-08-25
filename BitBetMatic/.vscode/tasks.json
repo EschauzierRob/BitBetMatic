@@ -71,7 +71,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/BitBetMatic.csproj",
+                "${workspaceFolder}/BitBetMaticFunctions.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
@@ -83,7 +83,7 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/BitBetMatic.csproj",
+                "${workspaceFolder}/BitBetMaticFunctions.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
@@ -97,7 +97,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/BitBetMatic.csproj"
+                "${workspaceFolder}/BitBetMaticFunctions.csproj"
             ],
             "problemMatcher": "$msCompile"
         }

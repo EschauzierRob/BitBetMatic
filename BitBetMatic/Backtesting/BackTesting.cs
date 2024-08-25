@@ -5,20 +5,20 @@ using System.Text;
 using System.Threading.Tasks;
 using BitBetMatic;
 using BitBetMatic.API;
-using Microsoft.AspNetCore.Authorization;
 using Newtonsoft.Json;
 using Skender.Stock.Indicators;
 
 public class BackTesting
 {
     private DataLoader dataLoader;
+    private IndicatorThresholdPersistency indicatorThresholdPersistency;
     public const string BtcMarket = "BTC-EUR";
     public const string EthMarket = "ETH-EUR";
 
     public BackTesting(IApiWrapper api)
     {
-
         dataLoader = new DataLoader(api);
+        indicatorThresholdPersistency = new IndicatorThresholdPersistency();
     }
 
     private (ITradingStrategy strategy, decimal result, string resultText) RunBacktest(ITradingStrategy strategy, string market, List<Quote> historicalData)
@@ -55,6 +55,10 @@ public class BackTesting
     {
         sb.AppendLine($"{market} backtesting:");
         var strat = await GetMostPerformantStrategyVariant<TStrat>(sb, market, numberOfVariants);
+
+        strat.Thresholds.Market = market;
+        strat.Thresholds.Strategy = strat.GetType().Name;
+        await indicatorThresholdPersistency.InsertThresholdsAsync(strat.Thresholds);
 
         string thresholds = JsonConvert.SerializeObject(((TStrat)strat).Thresholds);
 
@@ -104,7 +108,7 @@ public class BackTesting
     private async Task<TradingStrategyBase> GetMostPerformantStrategyVariant<TStrat>(StringBuilder sb, string market, int numberOfVariants) where TStrat : TradingStrategyBase, new()
     {
         TStrat strategy = new TStrat();
-        var thresholds = await new IndicatorThresholdPersistency().GetLatestThresholdsAsync(strategy.GetType().Name, market);
+        var thresholds = await indicatorThresholdPersistency.GetLatestThresholdsAsync(strategy.GetType().Name, market) ?? strategy.Thresholds;
         var thresholdVariants = GenerateThresholdVariations(thresholds, numberOfVariants);
         List<TStrat> strategies = new List<TStrat> { strategy };
 

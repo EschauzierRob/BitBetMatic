@@ -50,8 +50,21 @@ namespace BitBetMatic
 
             log.LogInformation("C# HTTP trigger function processed a request.");
             var sb = new StringBuilder();
-            var backtestResult = await new BackTesting(new BitvavoApi()).DoBacktestTuning<ModerateStrategy>(sb, BitBetMaticProcessor.BtcMarket);
-            return new OkObjectResult(backtestResult.result);
+            await new BackTesting(new BitvavoApi()).DoBacktestTuning<ModerateStrategy>(sb, BitBetMaticProcessor.BtcMarket, 50);
+            await new BackTesting(new BitvavoApi()).DoBacktestTuning<ModerateStrategy>(sb, BitBetMaticProcessor.EthMarket, 50);
+
+            await new BackTesting(new BitvavoApi()).DoBacktestTuning<AgressiveStrategy>(sb, BitBetMaticProcessor.BtcMarket, 50);
+            await new BackTesting(new BitvavoApi()).DoBacktestTuning<AgressiveStrategy>(sb, BitBetMaticProcessor.EthMarket, 50);
+            
+            await new BackTesting(new BitvavoApi()).DoBacktestTuning<ScoredStrategy>(sb, BitBetMaticProcessor.BtcMarket, 50);
+            await new BackTesting(new BitvavoApi()).DoBacktestTuning<ScoredStrategy>(sb, BitBetMaticProcessor.EthMarket, 50);
+            
+            await new BackTesting(new BitvavoApi()).DoBacktestTuning<StoplossStrategy>(sb, BitBetMaticProcessor.BtcMarket, 50);
+            await new BackTesting(new BitvavoApi()).DoBacktestTuning<StoplossStrategy>(sb, BitBetMaticProcessor.EthMarket, 50);
+            
+            await new BackTesting(new BitvavoApi()).DoBacktestTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.BtcMarket, 50);
+            await new BackTesting(new BitvavoApi()).DoBacktestTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.EthMarket, 50);
+            return new OkObjectResult("");
         }
     }
 

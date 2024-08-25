@@ -21,7 +21,7 @@ public class BackTesting
         indicatorThresholdPersistency = new IndicatorThresholdPersistency();
     }
 
-    private (ITradingStrategy strategy, decimal result, string resultText) RunBacktest(ITradingStrategy strategy, string market, List<Quote> historicalData)
+    private (ITradingStrategy strategy, decimal result, string resultText) RunBacktest(TradingStrategyBase strategy, string market, List<Quote> historicalData)
     {
         var portfolioManager = new PortfolioManager();
         portfolioManager.SetCash(300);
@@ -54,26 +54,31 @@ public class BackTesting
     public async Task<(TradingStrategyBase strategy, string result)> DoBacktestTuning<TStrat>(StringBuilder sb, string market, int numberOfVariants = 20) where TStrat : TradingStrategyBase, new()
     {
         sb.AppendLine($"{market} backtesting:");
-        var strat = await GetMostPerformantStrategyVariant<TStrat>(sb, market, numberOfVariants);
+        var strategy = new TStrat();
+        var (strat, highscore) = await GetMostPerformantStrategyVariant(strategy, sb, market, numberOfVariants);
 
-        strat.Thresholds.Market = market;
-        strat.Thresholds.Strategy = strat.GetType().Name;
-        await indicatorThresholdPersistency.InsertThresholdsAsync(strat.Thresholds);
+        if (strategy.Thresholds.Highscore > strat.Thresholds.Highscore)
+        {
+            strat.Thresholds.Market = market;
+            strat.Thresholds.Strategy = strat.GetType().Name;
+            strat.Thresholds.Highscore = highscore;
+            await indicatorThresholdPersistency.InsertThresholdsAsync(strat.Thresholds);
+        }
 
         string thresholds = JsonConvert.SerializeObject(((TStrat)strat).Thresholds);
 
         sb.AppendLine("Thresholds: ");
         sb.AppendLine(thresholds);
 
-        string result = sb.ToString();
-        Console.Write(result);
+        string resultString = sb.ToString();
+        Console.Write(resultString);
 
-        return (strat, result);
+        return (strat, resultString);
     }
 
     private async Task<ITradingStrategy> GetMostPerformantStrategy(StringBuilder sb, string market)
     {
-        List<ITradingStrategy> strategies = new List<ITradingStrategy>
+        List<TradingStrategyBase> strategies = new List<TradingStrategyBase>
             {
                 new ModerateStrategy(),
                 new AgressiveStrategy(),
@@ -105,10 +110,11 @@ public class BackTesting
         return historicalData;
     }
 
-    private async Task<TradingStrategyBase> GetMostPerformantStrategyVariant<TStrat>(StringBuilder sb, string market, int numberOfVariants) where TStrat : TradingStrategyBase, new()
+    private async Task<(TradingStrategyBase strategy, decimal result)> GetMostPerformantStrategyVariant<TStrat>(TStrat strategy, StringBuilder sb, string market, int numberOfVariants) where TStrat : TradingStrategyBase, new()
     {
-        TStrat strategy = new TStrat();
         var thresholds = await indicatorThresholdPersistency.GetLatestThresholdsAsync(strategy.GetType().Name, market) ?? strategy.Thresholds;
+        strategy.Thresholds = thresholds;
+
         var thresholdVariants = GenerateThresholdVariations(thresholds, numberOfVariants);
         List<TStrat> strategies = new List<TStrat> { strategy };
 
@@ -118,7 +124,28 @@ public class BackTesting
         }
 
         (TradingStrategyBase strategy, decimal total) res = (strategies.First(), decimal.Zero);
+        List<Task<(TStrat strategy, decimal result, string resultText)>> tasks = await RunMultiRangeHistoricalTesting(market, strategies, res);
 
+        // Wacht op alle taken om te voltooien
+        var results = await Task.WhenAll(tasks);
+
+        // Verwerk de resultaten
+        foreach (var testRes in results)
+        {
+            sb.AppendLine(testRes.resultText);
+            if (res.total < testRes.result)
+            {
+                Console.WriteLine($"new highest: {testRes.result}");
+                res = (testRes.strategy, testRes.result);
+            }
+        }
+
+        sb.AppendLine($"Winning variant of {nameof(res.strategy)} got a total result of {res.total}");
+        return res;
+    }
+
+    private async Task<List<Task<(TStrat strategy, decimal result, string resultText)>>> RunMultiRangeHistoricalTesting<TStrat>(string market, List<TStrat> strategies, (TradingStrategyBase strategy, decimal total) res) where TStrat : TradingStrategyBase, new()
+    {
         // Gebruik verschillende tijdspannes
         var historicalDataLong = await GetHistoricalData(market, res.strategy.Interval(), DateTime.Today.AddDays(-365));
         var historicalDataMedium = historicalDataLong.Where(x => x.Date > DateTime.Today.AddDays(-180)).ToList();
@@ -141,29 +168,38 @@ public class BackTesting
 
                 // Combineer de teksten van de resultaten
                 string combinedText = $"SHORT: {shortTermResult.resultText}\nMEDIUM: {mediumTermResult.resultText}\nLONG: {longTermResult.resultText}\nCombined Result: {combinedResult}";
+                Console.WriteLine(combinedText);
 
                 return (strategy: strat, result: combinedResult, resultText: combinedText);
             }));
         }
 
-        // Wacht op alle taken om te voltooien
-        var results = await Task.WhenAll(tasks);
-
-        // Verwerk de resultaten
-        foreach (var testRes in results)
-        {
-            sb.AppendLine(testRes.resultText);
-            if (res.total < testRes.result)
-            {
-                Console.WriteLine($"new highest: {testRes.result}");
-                res = (testRes.strategy, testRes.result);
-            }
-        }
-
-        sb.AppendLine($"Winning variant of {nameof(res.strategy)} got a total result of {res.total}");
-        return res.strategy;
+        return tasks;
     }
 
+    private async Task<List<Task<(TStrat strategy, decimal result, string resultText)>>> Run60DayHistoricalTesting<TStrat>(string market, List<TStrat> strategies, (TradingStrategyBase strategy, decimal total) res) where TStrat : TradingStrategyBase, new()
+    {
+        // Gebruik verschillende tijdspannes
+        var historicalData = await GetHistoricalData(market, res.strategy.Interval());
+
+        List<Task<(TStrat strategy, decimal result, string resultText)>> tasks = new List<Task<(TStrat strategy, decimal result, string resultText)>>();
+
+        // Run backtest for different time spans
+        foreach (var strat in strategies)
+        {
+            tasks.Add(Task.Run(() =>
+            {
+                var resultScore = RunBacktest(strat, market, historicalData);
+
+                // Combineer de teksten van de resultaten
+                string combinedText = $"Result: {resultScore.result}";
+
+                return (strategy: strat, resultScore.result, resultScore.resultText);
+            }));
+        }
+
+        return tasks;
+    }
     private IEnumerable<IndicatorThresholds> GenerateThresholdVariations(IndicatorThresholds baseThresholds, int variationCount)
     {
         var random = new Random();
@@ -171,21 +207,54 @@ public class BackTesting
         {
             int macdFastPeriod = baseThresholds.MacdFastPeriod + random.Next(-3, 3);
             int macdSlowPeriod = baseThresholds.MacdSlowPeriod + random.Next(-6, 6);
+
             yield return new IndicatorThresholds
             {
-                SmaLongTerm = baseThresholds.SmaLongTerm + random.Next(-15, 15),
-                RsiPeriod = baseThresholds.RsiPeriod + random.Next(-3, 3),
+                // RSI thresholds
                 RsiOverbought = baseThresholds.RsiOverbought + random.Next(-8, 8),
                 RsiOversold = baseThresholds.RsiOversold + random.Next(-8, 8),
+                RsiPeriod = baseThresholds.RsiPeriod + random.Next(-3, 3),
+
+                // MACD thresholds
                 MacdFastPeriod = macdFastPeriod,
                 MacdSlowPeriod = Math.Max(macdFastPeriod + 1, macdSlowPeriod),
                 MacdSignalPeriod = baseThresholds.MacdSignalPeriod + random.Next(-2, 2),
-                BollingerBandsPeriod = baseThresholds.BollingerBandsPeriod + random.Next(-5, 5),
-                BollingerBandsDeviation = baseThresholds.BollingerBandsDeviation + (random.NextDouble() * 0.2d),
+                MacdSignalLine = baseThresholds.MacdSignalLine + ((decimal)random.NextDouble() * 0.1m - 0.05m),
+
+                // ATR thresholds
+                AtrMultiplier = baseThresholds.AtrMultiplier + ((decimal)random.NextDouble() * 0.5m - 0.25m),
+                AtrPeriod = baseThresholds.AtrPeriod + random.Next(-3, 3),
+
+                // SMA thresholds
+                SmaShortTerm = baseThresholds.SmaShortTerm + random.Next(-10, 10),
+                SmaLongTerm = baseThresholds.SmaLongTerm + random.Next(-15, 15),
+
+                // Parabolic SAR thresholds
+                ParabolicSarStep = baseThresholds.ParabolicSarStep + (random.NextDouble() * 0.01d - 0.005d),
+                ParabolicSarMax = baseThresholds.ParabolicSarMax + (random.NextDouble() * 0.1d - 0.05d),
+
+                // Bollinger Bands thresholds
+                BollingerBandsPeriod = Math.Max(2, baseThresholds.BollingerBandsPeriod + random.Next(-5, 5)),
+                BollingerBandsDeviation = baseThresholds.BollingerBandsDeviation + (random.NextDouble() * 0.2d - 0.1d),
+
+                // ADX thresholds
+                AdxStrongTrend = baseThresholds.AdxStrongTrend + (random.NextDouble() * 10d - 5d),
+                AdxPeriod = baseThresholds.AdxPeriod + random.Next(-3, 3),
+
+                // Stochastic thresholds
+                StochasticOverbought = baseThresholds.StochasticOverbought + (random.NextDouble() * 10d - 5d),
+                StochasticOversold = baseThresholds.StochasticOversold + (random.NextDouble() * 10d - 5d),
+                StochasticPeriod = baseThresholds.StochasticPeriod + random.Next(-3, 3),
+                StochasticSignalPeriod = baseThresholds.StochasticSignalPeriod + random.Next(-1, 1),
+
+                // ROC thresholds
                 RocPeriod = baseThresholds.RocPeriod + random.Next(-3, 3),
+
+                // Buy/Sell thresholds
                 BuyThreshold = baseThresholds.BuyThreshold + random.Next(-15, 15),
                 SellThreshold = baseThresholds.SellThreshold + random.Next(-15, 15)
             };
         }
     }
+
 }

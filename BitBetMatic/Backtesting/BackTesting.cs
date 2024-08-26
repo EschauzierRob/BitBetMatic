@@ -96,9 +96,12 @@ public class BackTesting
 
         foreach (var strat in strategies)
         {
+            var thresholds = await indicatorThresholdPersistency.GetLatestThresholdsAsync(strat.GetType().Name, market) ?? strat.Thresholds;
+            strat.Thresholds = thresholds;
+
             var testRes = RunBacktest(strat, market, historicalData);
             sb.AppendLine(testRes.resultText);
-            if (res.total < testRes.result)
+            if (res.total < testRes.result && testRes.strategy.GetType() != new HoldStrategy().GetType())
             {
                 res = (testRes.strategy, testRes.result);
             }

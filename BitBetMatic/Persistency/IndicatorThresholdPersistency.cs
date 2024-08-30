@@ -16,6 +16,7 @@ public class IndicatorThresholdPersistency
     {
         using (var context = new TradingDbContext())
         {
+            Console.WriteLine($"Saving new thresholds for {thresholds.Strategy} with a score of {thresholds.Highscore}");
             context.IndicatorThresholds.Add(thresholds);
             await context.SaveChangesAsync();
         }

@@ -53,7 +53,7 @@ public class BackTesting
     }
     public async Task<(TradingStrategyBase strategy, string result)> DoBacktestTuning<TStrat>(StringBuilder sb, string market, int numberOfVariants = 20) where TStrat : TradingStrategyBase, new()
     {
-        sb.AppendLine($"{market} backtesting:");
+
         var strategy = new TStrat();
 
         var thresholds = await indicatorThresholdPersistency.GetLatestThresholdsAsync(strategy.GetType().Name, market) ?? strategy.Thresholds;
@@ -220,14 +220,14 @@ public class BackTesting
                 RsiPeriod = baseThresholds.RsiPeriod + random.Next(-3, 3),
 
                 // MACD thresholds
-                MacdFastPeriod = macdFastPeriod,
+                MacdFastPeriod = Math.Max(1, macdFastPeriod),
                 MacdSlowPeriod = Math.Max(macdFastPeriod + 1, macdSlowPeriod),
                 MacdSignalPeriod = Math.Max(1, baseThresholds.MacdSignalPeriod + random.Next(-2, 2)),
                 MacdSignalLine = baseThresholds.MacdSignalLine + ((decimal)random.NextDouble() * 0.1m - 0.05m),
 
                 // ATR thresholds
                 AtrMultiplier = baseThresholds.AtrMultiplier + ((decimal)random.NextDouble() * 0.5m - 0.25m),
-                AtrPeriod = Math.Max(1, baseThresholds.AtrPeriod + random.Next(-3, 3)),
+                AtrPeriod = Math.Max(2, baseThresholds.AtrPeriod + random.Next(-3, 3)),
 
                 // SMA thresholds
                 SmaShortTerm = baseThresholds.SmaShortTerm + random.Next(-10, 10),
@@ -248,11 +248,11 @@ public class BackTesting
                 // Stochastic thresholds
                 StochasticOverbought = baseThresholds.StochasticOverbought + (random.NextDouble() * 10d - 5d),
                 StochasticOversold = baseThresholds.StochasticOversold + (random.NextDouble() * 10d - 5d),
-                StochasticPeriod = baseThresholds.StochasticPeriod + random.Next(-3, 3),
+                StochasticPeriod = Math.Max(1, baseThresholds.StochasticPeriod + random.Next(-3, 3)),
                 StochasticSignalPeriod = Math.Max(1, baseThresholds.StochasticSignalPeriod + random.Next(-1, 1)),
 
                 // ROC thresholds
-                RocPeriod = baseThresholds.RocPeriod + random.Next(-3, 3),
+                RocPeriod = Math.Max(1, baseThresholds.RocPeriod + random.Next(-3, 3)),
 
                 // Buy/Sell thresholds
                 BuyThreshold = baseThresholds.BuyThreshold + random.Next(-15, 15),

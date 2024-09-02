@@ -20,10 +20,7 @@ public class PortfolioManager
     public void ExecuteTrade(TradeAction action)
     {
         decimal tokenAmount = action.AmountInEuro / action.CurrentTokenPrice;
-        if (!_assetBalances.ContainsKey(action.Market))
-        {
-            _assetBalances[action.Market] = (0, 0);
-        }
+        EnsureTokenExists(action);
         if (action.Action == BuySellHold.Buy && _cashBalance >= tokenAmount)
         {
             AddToTokenBalance(action, tokenAmount * tradeMargin);
@@ -36,17 +33,33 @@ public class PortfolioManager
         }
     }
 
+    private void EnsureTokenExists(TradeAction action)
+    {
+        EnsureTokenExists(action.Market);
+    }
+
+    private void EnsureTokenExists(string market)
+    {
+        if (!_assetBalances.ContainsKey(market))
+        {
+            _assetBalances[market] = (0, 0);
+        }
+    }
+
     public void SetTokenBalance(string market, decimal tokenAmount, decimal currentPrice)
     {
+        EnsureTokenExists(market);
         _assetBalances[market] = (tokenAmount, currentPrice);
     }
 
     private void AddToTokenBalance(TradeAction action, decimal tokenAmount)
     {
+        EnsureTokenExists(action);
         _assetBalances[action.Market] = (_assetBalances[action.Market].tokenAmount + tokenAmount, action.CurrentTokenPrice);
     }
     private void TakeFromTokenBalance(TradeAction action, decimal tokenAmount)
     {
+        EnsureTokenExists(action);
         _assetBalances[action.Market] = (_assetBalances[action.Market].tokenAmount - tokenAmount, action.CurrentTokenPrice);
     }
 
@@ -59,6 +72,7 @@ public class PortfolioManager
 
     public void SetTokenCurrentPrice(string market, decimal close)
     {
+        EnsureTokenExists(market);
         _assetBalances[market] = (_assetBalances[market].tokenAmount, close);
     }
 }

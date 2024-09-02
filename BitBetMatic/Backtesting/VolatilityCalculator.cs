@@ -54,8 +54,13 @@ public static class VolatilityCalculator
     public static double CalculateDecayRate(List<double> prices, int windowSize = 30, double minDecayRate = 0.01, double maxDecayRate = 0.1)
     {
         var (currentVolatility, minVolatility, maxVolatility) = CalculateVolatilityMetrics(prices, windowSize);
+        double normalizedVolatility = currentVolatility;
+
         // Normalize the volatility
-        double normalizedVolatility = (currentVolatility - minVolatility) / (maxVolatility - minVolatility);
+        if (maxVolatility != minVolatility)
+        {
+            normalizedVolatility = (currentVolatility - minVolatility) / (maxVolatility - minVolatility);
+        }
 
         // Map normalized volatility to decay rate
         double decayRate = minDecayRate + (maxDecayRate - minDecayRate) * normalizedVolatility;

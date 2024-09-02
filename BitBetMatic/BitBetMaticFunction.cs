@@ -51,7 +51,7 @@ namespace BitBetMatic
 
             log.LogInformation("C# HTTP trigger function processed a request.");
             var sb = new StringBuilder();
-            var numberOfVariants = 10;
+            var numberOfVariants = 30;
 
             var tasks = new List<Task<(TradingStrategyBase strategy, string result)>>{
 
@@ -70,11 +70,8 @@ namespace BitBetMatic
                 new BackTesting(new BitvavoApi()).DoBacktestTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
                 new BackTesting(new BitvavoApi()).DoBacktestTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
             };
-            
-            for (var i = 0; i < 5; i++)
-            {
+
                 await Task.WhenAll(tasks);
-            }
 
             return new OkObjectResult("");
         }

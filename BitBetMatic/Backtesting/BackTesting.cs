@@ -53,10 +53,13 @@ public class BackTesting
     }
     public async Task<(TradingStrategyBase strategy, string result)> DoBacktestTuning<TStrat>(StringBuilder sb, string market, int numberOfVariants = 20) where TStrat : TradingStrategyBase, new()
     {
-
         var strategy = new TStrat();
 
-        var thresholds = await indicatorThresholdPersistency.GetLatestThresholdsAsync(strategy.GetType().Name, market) ?? strategy.Thresholds;
+        var prices = GetHistoricalData(market, strategy.Interval(), DateTime.Today.AddDays(-15)).Result.Select(x => (double)x.Close);
+        var decayRate = VolatilityCalculator.CalculateDecayRate(prices.ToList());
+
+        var thresholds = await indicatorThresholdPersistency.GetLatestDecayedThresholdsAsync(strategy.GetType().Name, market, decayRate) ?? strategy.Thresholds;
+
         strategy.Thresholds = thresholds;
 
         var (strat, highscore) = await GetMostPerformantStrategyVariant(strategy, sb, market, numberOfVariants);
@@ -234,8 +237,8 @@ public class BackTesting
                 SmaLongTerm = baseThresholds.SmaLongTerm + random.Next(-15, 15),
 
                 // Parabolic SAR thresholds
-                ParabolicSarStep = baseThresholds.ParabolicSarStep + (random.NextDouble() * 0.01d - 0.005d),
-                ParabolicSarMax = baseThresholds.ParabolicSarMax + (random.NextDouble() * 0.1d - 0.05d),
+                ParabolicSarStep = Math.Max(0.005d, baseThresholds.ParabolicSarStep + (random.NextDouble() * 0.01d - 0.005d)),
+                ParabolicSarMax = Math.Max(baseThresholds.ParabolicSarMax + (random.NextDouble() * 0.1d - 0.05d), baseThresholds.ParabolicSarStep * 1.1),
 
                 // Bollinger Bands thresholds
                 BollingerBandsPeriod = Math.Max(2, baseThresholds.BollingerBandsPeriod + random.Next(-5, 5)),

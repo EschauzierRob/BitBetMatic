@@ -11,7 +11,7 @@ public class IndicatorThresholdPersistency
         thresholds.CreatedAt = DateTime.Now;
         await SaveThresholdsAsync(thresholds);
     }
-    
+
     public async Task SaveThresholdsAsync(IndicatorThresholds thresholds)
     {
         using (var context = new TradingDbContext())
@@ -30,6 +30,18 @@ public class IndicatorThresholdPersistency
                 .Where(t => t.Strategy == strategy && t.Market == market)
                 .OrderByDescending(t => t.CreatedAt)
                 .FirstOrDefaultAsync();
+        }
+    }
+    public async Task<IndicatorThresholds> GetLatestDecayedThresholdsAsync(string strategy, string market, double decayRate)
+    {
+        using (var context = new TradingDbContext())
+        {
+            // Calculate DecayScore based on the age of the thresholds and Highscore
+            var bestThresholds = await GetLatestThresholdsAsync(strategy, market);
+
+            bestThresholds.Highscore = bestThresholds.Highscore * (decimal)Math.Exp(-decayRate * (DateTime.Now - bestThresholds.CreatedAt).TotalDays); // Decay score calculation
+
+            return bestThresholds; // Return the best thresholds
         }
     }
 }

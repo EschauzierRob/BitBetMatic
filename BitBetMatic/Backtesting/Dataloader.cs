@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using BitBetMatic.API;
-using Microsoft.VisualBasic;
 using Skender.Stock.Indicators;
 
 public class DataLoader

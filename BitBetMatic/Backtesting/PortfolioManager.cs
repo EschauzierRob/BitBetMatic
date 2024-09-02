@@ -1,11 +1,10 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using BitBetMatic;
 public class PortfolioManager
 {
     private decimal _cashBalance;
-    private decimal tradeMargin = (decimal)0.9975;
+    private decimal tradeMargin = 0.9975m;
     private Dictionary<string, (decimal tokenAmount, decimal currentPrice)> _assetBalances;
 
     public PortfolioManager()

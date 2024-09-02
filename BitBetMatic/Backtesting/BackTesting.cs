@@ -122,7 +122,7 @@ public class BackTesting
 
     private async Task<(TradingStrategyBase strategy, decimal result)> GetMostPerformantStrategyVariant<TStrat>(TStrat strategy, StringBuilder sb, string market, int numberOfVariants) where TStrat : TradingStrategyBase, new()
     {
-        var thresholdVariants = GenerateThresholdVariations(strategy.Thresholds, numberOfVariants);
+        var thresholdVariants = GenerateThresholdVariations(strategy.Thresholds, numberOfVariants, 0.5d);
         List<TStrat> strategies = new List<TStrat> { strategy };
 
         foreach (var thresholdVariant in thresholdVariants)
@@ -174,7 +174,7 @@ public class BackTesting
                 decimal combinedResult = 0.5m * shortTermResult.result + 0.3m * mediumTermResult.result + 0.2m * longTermResult.result;
 
                 // Combineer de teksten van de resultaten
-                string combinedText = $"SHORT: {shortTermResult.resultText}\nMEDIUM: {mediumTermResult.resultText}\nLONG: {longTermResult.resultText}\nCombined Result: {combinedResult}";
+                string combinedText = $"{market} - SHORT: {shortTermResult.resultText}\nMEDIUM: {mediumTermResult.resultText}\nLONG: {longTermResult.resultText}\nCombined Result: {combinedResult}";
                 Console.WriteLine(combinedText);
 
                 return (strategy: strat, result: combinedResult, resultText: combinedText);
@@ -207,61 +207,80 @@ public class BackTesting
 
         return tasks;
     }
-    private IEnumerable<IndicatorThresholds> GenerateThresholdVariations(IndicatorThresholds baseThresholds, int variationCount)
+
+    public IEnumerable<IndicatorThresholds> GenerateThresholdVariations(IndicatorThresholds baseThresholds, int variationCount, double maxDeviationPercentage)
     {
         var random = new Random();
+
         for (int i = 0; i < variationCount; i++)
         {
-            int macdFastPeriod = baseThresholds.MacdFastPeriod + random.Next(-3, 3);
-            int macdSlowPeriod = baseThresholds.MacdSlowPeriod + random.Next(-6, 6);
+            // Calculate percentage-based deviation ranges
+            int GetRandomIntWithinDeviation(int baseValue, double percentage)
+            {
+                int deviation = (int)Math.Round(Math.Abs(baseValue) * percentage / 100.0);
+                return baseValue + random.Next(-deviation, deviation + 1);
+            }
+
+            decimal GetRandomDecimalWithinDeviation(decimal baseValue, double percentage)
+            {
+                decimal deviation = Math.Abs(baseValue) * (decimal)percentage / 100.0m;
+                return baseValue + ((decimal)random.NextDouble() * 2 * deviation - deviation);
+            }
+
+            double GetRandomDoubleWithinDeviation(double baseValue, double percentage)
+            {
+                double deviation = Math.Abs(baseValue) * percentage / 100.0;
+                return baseValue + (random.NextDouble() * 2 * deviation - deviation);
+            }
+
+            int macdFastPeriod = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.MacdFastPeriod, maxDeviationPercentage));
 
             yield return new IndicatorThresholds
             {
                 // RSI thresholds
-                RsiOverbought = baseThresholds.RsiOverbought + random.Next(-8, 8),
-                RsiOversold = baseThresholds.RsiOversold + random.Next(-8, 8),
-                RsiPeriod = baseThresholds.RsiPeriod + random.Next(-3, 3),
+                RsiOverbought = GetRandomIntWithinDeviation(baseThresholds.RsiOverbought, maxDeviationPercentage),
+                RsiOversold = GetRandomIntWithinDeviation(baseThresholds.RsiOversold, maxDeviationPercentage),
+                RsiPeriod = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.RsiPeriod, maxDeviationPercentage)),
 
                 // MACD thresholds
-                MacdFastPeriod = Math.Max(1, macdFastPeriod),
-                MacdSlowPeriod = Math.Max(macdFastPeriod + 1, macdSlowPeriod),
-                MacdSignalPeriod = Math.Max(1, baseThresholds.MacdSignalPeriod + random.Next(-2, 2)),
-                MacdSignalLine = baseThresholds.MacdSignalLine + ((decimal)random.NextDouble() * 0.1m - 0.05m),
+                MacdFastPeriod = macdFastPeriod,
+                MacdSlowPeriod = Math.Max(macdFastPeriod + 1, GetRandomIntWithinDeviation(baseThresholds.MacdSlowPeriod, maxDeviationPercentage)),
+                MacdSignalPeriod = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.MacdSignalPeriod, maxDeviationPercentage)),
+                MacdSignalLine = GetRandomDecimalWithinDeviation(baseThresholds.MacdSignalLine, maxDeviationPercentage),
 
                 // ATR thresholds
-                AtrMultiplier = baseThresholds.AtrMultiplier + ((decimal)random.NextDouble() * 0.5m - 0.25m),
-                AtrPeriod = Math.Max(2, baseThresholds.AtrPeriod + random.Next(-3, 3)),
+                AtrMultiplier = GetRandomDecimalWithinDeviation(baseThresholds.AtrMultiplier, maxDeviationPercentage),
+                AtrPeriod = Math.Max(2, GetRandomIntWithinDeviation(baseThresholds.AtrPeriod, maxDeviationPercentage)),
 
                 // SMA thresholds
-                SmaShortTerm = baseThresholds.SmaShortTerm + random.Next(-10, 10),
-                SmaLongTerm = baseThresholds.SmaLongTerm + random.Next(-15, 15),
+                SmaShortTerm = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.SmaShortTerm, maxDeviationPercentage)),
+                SmaLongTerm = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.SmaLongTerm, maxDeviationPercentage)),
 
                 // Parabolic SAR thresholds
-                ParabolicSarStep = Math.Max(0.005d, baseThresholds.ParabolicSarStep + (random.NextDouble() * 0.01d - 0.005d)),
-                ParabolicSarMax = Math.Max(baseThresholds.ParabolicSarMax + (random.NextDouble() * 0.1d - 0.05d), baseThresholds.ParabolicSarStep * 1.1),
+                ParabolicSarStep = Math.Max(0.005d, GetRandomDoubleWithinDeviation(baseThresholds.ParabolicSarStep, maxDeviationPercentage)),
+                ParabolicSarMax = Math.Max(GetRandomDoubleWithinDeviation(baseThresholds.ParabolicSarMax, maxDeviationPercentage), baseThresholds.ParabolicSarStep * 1.1),
 
                 // Bollinger Bands thresholds
-                BollingerBandsPeriod = Math.Max(2, baseThresholds.BollingerBandsPeriod + random.Next(-5, 5)),
-                BollingerBandsDeviation = baseThresholds.BollingerBandsDeviation + (random.NextDouble() * 0.2d - 0.1d),
+                BollingerBandsPeriod = Math.Max(2, GetRandomIntWithinDeviation(baseThresholds.BollingerBandsPeriod, maxDeviationPercentage)),
+                BollingerBandsDeviation = GetRandomDoubleWithinDeviation(baseThresholds.BollingerBandsDeviation, maxDeviationPercentage),
 
                 // ADX thresholds
-                AdxStrongTrend = baseThresholds.AdxStrongTrend + (random.NextDouble() * 10d - 5d),
-                AdxPeriod = Math.Max(1, baseThresholds.AdxPeriod + random.Next(-3, 3)),
+                AdxStrongTrend = GetRandomDoubleWithinDeviation(baseThresholds.AdxStrongTrend, maxDeviationPercentage),
+                AdxPeriod = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.AdxPeriod, maxDeviationPercentage)),
 
                 // Stochastic thresholds
-                StochasticOverbought = baseThresholds.StochasticOverbought + (random.NextDouble() * 10d - 5d),
-                StochasticOversold = baseThresholds.StochasticOversold + (random.NextDouble() * 10d - 5d),
-                StochasticPeriod = Math.Max(1, baseThresholds.StochasticPeriod + random.Next(-3, 3)),
-                StochasticSignalPeriod = Math.Max(1, baseThresholds.StochasticSignalPeriod + random.Next(-1, 1)),
+                StochasticOverbought = GetRandomDoubleWithinDeviation(baseThresholds.StochasticOverbought ?? 0, maxDeviationPercentage),
+                StochasticOversold = GetRandomDoubleWithinDeviation(baseThresholds.StochasticOversold ?? 0, maxDeviationPercentage),
+                StochasticPeriod = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.StochasticPeriod, maxDeviationPercentage)),
+                StochasticSignalPeriod = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.StochasticSignalPeriod, maxDeviationPercentage)),
 
                 // ROC thresholds
-                RocPeriod = Math.Max(1, baseThresholds.RocPeriod + random.Next(-3, 3)),
+                RocPeriod = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.RocPeriod, maxDeviationPercentage)),
 
                 // Buy/Sell thresholds
-                BuyThreshold = baseThresholds.BuyThreshold + random.Next(-15, 15),
-                SellThreshold = baseThresholds.SellThreshold + random.Next(-15, 15)
+                BuyThreshold = GetRandomIntWithinDeviation(baseThresholds.BuyThreshold, maxDeviationPercentage),
+                SellThreshold = GetRandomIntWithinDeviation(baseThresholds.SellThreshold, maxDeviationPercentage)
             };
         }
     }
-
 }

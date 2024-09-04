@@ -70,9 +70,9 @@ namespace BitBetMatic
 
                 // Bollinger Bands Scoring
                 if (currentPrice < Functions.ToDecimal(bb.LowerBand))
-                    score += (int)((Functions.ToDecimal(bb.LowerBand) - currentPrice) / Functions.ToDecimal(bb.LowerBand) * 100);
+                    score += (int)((Functions.ToDecimal(bb.LowerBand ?? 1d) - currentPrice) / Functions.ToDecimal(bb.LowerBand ?? 1d) * 100);
                 else if (currentPrice > Functions.ToDecimal(bb.UpperBand))
-                    score -= (int)((currentPrice - Functions.ToDecimal(bb.UpperBand)) / Functions.ToDecimal(bb.UpperBand) * 100);
+                    score -= (int)((currentPrice - Functions.ToDecimal(bb.UpperBand ?? 1d)) / Functions.ToDecimal(bb.UpperBand ?? 1d) * 100);
 
                 // EMA200 Cross Scoring
                 if (currentPrice > Functions.ToDecimal(ema200.Ema))

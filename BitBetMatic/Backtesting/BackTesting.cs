@@ -122,7 +122,7 @@ public class BackTesting
 
     private async Task<(TradingStrategyBase strategy, decimal result)> GetMostPerformantStrategyVariant<TStrat>(TStrat strategy, StringBuilder sb, string market, int numberOfVariants) where TStrat : TradingStrategyBase, new()
     {
-        var thresholdVariants = GenerateThresholdVariations(strategy.Thresholds, numberOfVariants, 0.5d);
+        var thresholdVariants = GenerateThresholdVariations(strategy.Thresholds, numberOfVariants, 10d);
         List<TStrat> strategies = new List<TStrat> { strategy };
 
         foreach (var thresholdVariant in thresholdVariants)

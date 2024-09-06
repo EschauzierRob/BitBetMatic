@@ -50,7 +50,7 @@ namespace BitBetMatic
             var adx = quotes.GetAdx(14).LastOrDefault();
             var psar = quotes.GetParabolicSar(Thresholds.ParabolicSarStep, Thresholds.ParabolicSarMax).LastOrDefault(); // Gebruik Thresholds voor Parabolic SAR
 
-            if (atr == null || ema200 == null || rsi == null || macd == null || bb == null || adx == null || psar == null)
+            if (atr == null || ema200 == null || rsi == null || macd == null || bb == null || adx == null || psar == null || bb.UpperBand == null || bb.LowerBand == null)
             {
                 return (BuySellHold.Inconclusive, 0);
             }
@@ -115,7 +115,7 @@ namespace BitBetMatic
             return (signal, finalScore);
         }
 
-        public override string Interval() => "1h";
+        public override string Interval() => "15m";
 
         public override int Limit() => Thresholds.SmaLongTerm; // Gebruik de Threshold waarde voor Limiet
     }

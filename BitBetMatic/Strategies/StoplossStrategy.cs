@@ -48,7 +48,7 @@ namespace BitBetMatic
             var macd = quotes.GetMacd().LastOrDefault();
             var bb = quotes.GetBollingerBands(Thresholds.BollingerBandsPeriod, Thresholds.BollingerBandsDeviation).LastOrDefault();
 
-            if (atr == null || ema200 == null || rsi == null || macd == null || bb == null)
+            if (atr == null || ema200 == null || rsi == null || macd == null || bb == null || bb.UpperBand == null || bb.LowerBand == null)
             {
                 return (BuySellHold.Inconclusive, 0);
             }
@@ -113,7 +113,7 @@ namespace BitBetMatic
             return (signal, score);
         }
 
-        public override string Interval() => "1h";
+        public override string Interval() => "15m";
 
         public override int Limit() => Thresholds.SmaLongTerm;
     }

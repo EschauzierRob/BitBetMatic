@@ -49,7 +49,7 @@ namespace BitBetMatic
             var stochastic = quotes.GetStoch(Thresholds.StochasticPeriod, Thresholds.StochasticSignalPeriod).LastOrDefault(); // Gebruik Thresholds voor Stochastic Oscillator
             var adx = quotes.GetAdx(Thresholds.AdxPeriod).LastOrDefault(); // Gebruik Thresholds voor ADX
 
-            if (ema50 == null || ema200 == null || rsi == null || macd == null || bb == null || stochastic == null || adx == null)
+            if (ema50 == null || ema200 == null || rsi == null || macd == null || bb == null || stochastic == null || adx == null || bb.UpperBand == null || bb.LowerBand == null)
             {
                 return (BuySellHold.Inconclusive, 0);
             }
@@ -97,7 +97,7 @@ namespace BitBetMatic
             return (signal, score);
         }
 
-        public override string Interval() => "1h";
+        public override string Interval() => "15m";
 
         public override int Limit() => Thresholds.SmaLongTerm; // Gebruik de Thresholds waarde voor limiet
     }

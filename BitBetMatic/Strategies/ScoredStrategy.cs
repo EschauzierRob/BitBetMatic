@@ -49,7 +49,7 @@ namespace BitBetMatic
 
             var atr = quotes.GetAtr(Thresholds.AtrPeriod).LastOrDefault(); // Gebruik Thresholds voor ATR
 
-            if (ema200 == null || rsi == null || macd == null || bb == null || stochastic == null || atr == null)
+            if (ema200 == null || rsi == null || macd == null || bb == null || stochastic == null || atr == null || bb.UpperBand == null || bb.LowerBand == null)
             {
                 return (BuySellHold.Inconclusive, 0);
             }
@@ -70,9 +70,9 @@ namespace BitBetMatic
 
                 // Bollinger Bands Scoring
                 if (currentPrice < Functions.ToDecimal(bb.LowerBand))
-                    score += (int)((Functions.ToDecimal(bb.LowerBand ?? 1d) - currentPrice) / Functions.ToDecimal(bb.LowerBand ?? 1d) * 100);
+                    score += (int)((Functions.ToDecimal(bb.LowerBand) - currentPrice) / Functions.ToDecimal(bb.LowerBand) * 100);
                 else if (currentPrice > Functions.ToDecimal(bb.UpperBand))
-                    score -= (int)((currentPrice - Functions.ToDecimal(bb.UpperBand ?? 1d)) / Functions.ToDecimal(bb.UpperBand ?? 1d) * 100);
+                    score -= (int)((currentPrice - Functions.ToDecimal(bb.UpperBand)) / Functions.ToDecimal(bb.UpperBand) * 100);
 
                 // EMA200 Cross Scoring
                 if (currentPrice > Functions.ToDecimal(ema200.Ema))
@@ -100,7 +100,7 @@ namespace BitBetMatic
             return (signal, Math.Abs(score));
         }
 
-        public override string Interval() => "1h";
+        public override string Interval() => "15m";
 
         public override int Limit() => Thresholds.SmaLongTerm; // Gebruik de Thresholds waarde voor Limiet
     }

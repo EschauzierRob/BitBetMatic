@@ -47,7 +47,7 @@ namespace BitBetMatic
             var bb = quotes.GetBollingerBands(Thresholds.BollingerBandsPeriod, Thresholds.BollingerBandsDeviation).LastOrDefault(); // Gebruik Thresholds voor Bollinger Bands
             var roc = quotes.GetRoc(Thresholds.RocPeriod).LastOrDefault(); // Gebruik Thresholds waarde voor ROC (Momentum)
 
-            if (ema200 == null || rsi == null || macd == null || bb == null || roc == null)
+            if (ema200 == null || rsi == null || macd == null || bb == null || roc == null || bb.UpperBand == null || bb.LowerBand == null)
             {
                 return (BuySellHold.Inconclusive, 0);
             }
@@ -86,7 +86,7 @@ namespace BitBetMatic
             return (signal, score);
         }
 
-        public override string Interval() => "1h";
+        public override string Interval() => "15m";
 
         public override int Limit() => Thresholds.SmaLongTerm; // Gebruik de Thresholds waarde voor limiet
     }

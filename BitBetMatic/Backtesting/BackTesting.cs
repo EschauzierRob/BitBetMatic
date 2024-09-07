@@ -64,7 +64,7 @@ public class BackTesting
 
         var (strat, highscore) = await GetMostPerformantStrategyVariant(strategy, sb, market, numberOfVariants);
 
-        if (highscore > strategy.Thresholds.Highscore)
+        if (highscore > strategy.Thresholds.Highscore)  
         {
             strat.Thresholds.Market = market;
             strat.Thresholds.Strategy = strat.GetType().Name;
@@ -113,7 +113,6 @@ public class BackTesting
     }
     private async Task<List<Quote>> GetHistoricalData(string market, string interval = "1h", DateTime? start = null, DateTime? end = null)
     {
-        // Voorstel voor meerdere tijdspannes (60 dagen, 180 dagen, 365 dagen)
         start ??= DateTime.Today.AddDays(-60);
         end ??= DateTime.Today;
         var historicalData = await dataLoader.LoadHistoricalData(market, interval, 1440, start.Value, end.Value);
@@ -122,7 +121,7 @@ public class BackTesting
 
     private async Task<(TradingStrategyBase strategy, decimal result)> GetMostPerformantStrategyVariant<TStrat>(TStrat strategy, StringBuilder sb, string market, int numberOfVariants) where TStrat : TradingStrategyBase, new()
     {
-        var thresholdVariants = GenerateThresholdVariations(strategy.Thresholds, numberOfVariants, 10d);
+        var thresholdVariants = GenerateThresholdVariations(strategy.Thresholds, numberOfVariants, 25d);
         List<TStrat> strategies = new List<TStrat> { strategy };
 
         foreach (var thresholdVariant in thresholdVariants)
@@ -131,7 +130,7 @@ public class BackTesting
         }
 
         (TradingStrategyBase strategy, decimal total) res = (strategies.First(), decimal.Zero);
-        List<Task<(TStrat strategy, decimal result, string resultText)>> tasks = await RunMultiRangeHistoricalTesting(market, strategies, res);
+        List<Task<(TStrat strategy, decimal result, string resultText)>> tasks = await RunMultiRangeHistoricalTesting(market, strategies, res, 360);
 
         // Wacht op alle taken om te voltooien
         var results = await Task.WhenAll(tasks);
@@ -151,12 +150,12 @@ public class BackTesting
         return res;
     }
 
-    private async Task<List<Task<(TStrat strategy, decimal result, string resultText)>>> RunMultiRangeHistoricalTesting<TStrat>(string market, List<TStrat> strategies, (TradingStrategyBase strategy, decimal total) res) where TStrat : TradingStrategyBase, new()
+    private async Task<List<Task<(TStrat strategy, decimal result, string resultText)>>> RunMultiRangeHistoricalTesting<TStrat>(string market, List<TStrat> strategies, (TradingStrategyBase strategy, decimal total) res, int longSpan = 360) where TStrat : TradingStrategyBase, new()
     {
         // Gebruik verschillende tijdspannes
-        var historicalDataLong = await GetHistoricalData(market, res.strategy.Interval(), DateTime.Today.AddDays(-365));
-        var historicalDataMedium = historicalDataLong.Where(x => x.Date > DateTime.Today.AddDays(-180)).ToList();
-        var historicalDataShort = historicalDataMedium.Where(x => x.Date > DateTime.Today.AddDays(-30)).ToList();
+        var historicalDataLong = await GetHistoricalData(market, res.strategy.Interval(), DateTime.Today.AddDays(-longSpan));
+        var historicalDataMedium = historicalDataLong.Where(x => x.Date > DateTime.Today.AddDays(-longSpan/2)).ToList();
+        var historicalDataShort = historicalDataMedium.Where(x => x.Date > DateTime.Today.AddDays(-longSpan/12)).ToList();
 
         List<Task<(TStrat strategy, decimal result, string resultText)>> tasks = new List<Task<(TStrat strategy, decimal result, string resultText)>>();
 
@@ -235,11 +234,12 @@ public class BackTesting
 
             int macdFastPeriod = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.MacdFastPeriod, maxDeviationPercentage));
 
+            int smaShortTerm = GetRandomIntWithinDeviation(baseThresholds.SmaShortTerm, maxDeviationPercentage);
             yield return new IndicatorThresholds
             {
                 // RSI thresholds
-                RsiOverbought = GetRandomIntWithinDeviation(baseThresholds.RsiOverbought, maxDeviationPercentage),
-                RsiOversold = GetRandomIntWithinDeviation(baseThresholds.RsiOversold, maxDeviationPercentage),
+                RsiOverbought = Math.Abs(GetRandomIntWithinDeviation(baseThresholds.RsiOverbought, maxDeviationPercentage)),
+                RsiOversold = Math.Abs(GetRandomIntWithinDeviation(baseThresholds.RsiOversold, maxDeviationPercentage)),
                 RsiPeriod = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.RsiPeriod, maxDeviationPercentage)),
 
                 // MACD thresholds
@@ -253,8 +253,8 @@ public class BackTesting
                 AtrPeriod = Math.Max(2, GetRandomIntWithinDeviation(baseThresholds.AtrPeriod, maxDeviationPercentage)),
 
                 // SMA thresholds
-                SmaShortTerm = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.SmaShortTerm, maxDeviationPercentage)),
-                SmaLongTerm = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.SmaLongTerm, maxDeviationPercentage)),
+                SmaShortTerm = Math.Max(1, smaShortTerm),
+                SmaLongTerm = Math.Max(smaShortTerm+1, GetRandomIntWithinDeviation(baseThresholds.SmaLongTerm, maxDeviationPercentage)),
 
                 // Parabolic SAR thresholds
                 ParabolicSarStep = Math.Max(0.005d, GetRandomDoubleWithinDeviation(baseThresholds.ParabolicSarStep, maxDeviationPercentage)),
@@ -266,7 +266,7 @@ public class BackTesting
 
                 // ADX thresholds
                 AdxStrongTrend = GetRandomDoubleWithinDeviation(baseThresholds.AdxStrongTrend, maxDeviationPercentage),
-                AdxPeriod = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.AdxPeriod, maxDeviationPercentage)),
+                AdxPeriod = Math.Max(2, GetRandomIntWithinDeviation(baseThresholds.AdxPeriod, maxDeviationPercentage)),
 
                 // Stochastic thresholds
                 StochasticOverbought = GetRandomDoubleWithinDeviation(baseThresholds.StochasticOverbought ?? 0, maxDeviationPercentage),
@@ -278,8 +278,8 @@ public class BackTesting
                 RocPeriod = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.RocPeriod, maxDeviationPercentage)),
 
                 // Buy/Sell thresholds
-                BuyThreshold = GetRandomIntWithinDeviation(baseThresholds.BuyThreshold, maxDeviationPercentage),
-                SellThreshold = GetRandomIntWithinDeviation(baseThresholds.SellThreshold, maxDeviationPercentage)
+                BuyThreshold = Math.Abs(GetRandomIntWithinDeviation(baseThresholds.BuyThreshold, maxDeviationPercentage)),
+                SellThreshold = Math.Abs(GetRandomIntWithinDeviation(baseThresholds.SellThreshold, maxDeviationPercentage))
             };
         }
     }

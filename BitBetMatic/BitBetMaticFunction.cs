@@ -9,6 +9,7 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using BitBetMatic.API;
 using System.Collections.Generic;
+using Skender.Stock.Indicators;
 
 namespace BitBetMatic
 {
@@ -50,8 +51,47 @@ namespace BitBetMatic
             }
 
             log.LogInformation("C# HTTP trigger function processed a request.");
+            await BackTestVariants();
+            // await FindPatterns();
+
+            return new OkObjectResult("");
+        }
+
+        private static async Task FindPatterns()
+        {
+            // Voorbeeldlijst van Quotes
+            var dataLoader = new DataLoader(new BitvavoApi());
+
+            var start = DateTime.Today.AddDays(-2);
+            var end = DateTime.Today;
+            var historicalData = await dataLoader.LoadHistoricalData("ETH-EUR", "1h", 1440, start, end);
+
+            List<Quote> quotes = historicalData;
+
+            int trendWindowSize = 2; // Aantal Quotes om te analyseren voor trends
+            decimal trendThreshold = 5.0m; // Drempel voor procentuele verandering
+
+            var patterns = CandleExtensions.ClassifyPatterns(quotes, trendWindowSize, trendThreshold);
+
+            // // Print patronen
+            Console.WriteLine("Geïdentificeerde Patronen:");
+            foreach (var pattern in patterns)
+            {
+                Console.WriteLine($"Patroon: {pattern.PatternType}, Datum: {pattern.PatternDate}");
+                var behaviors = CandleExtensions.AnalyzePreReversalCandles(pattern.PreReversalCandles);
+                foreach (var behavior in behaviors)
+                {
+                    Console.WriteLine($" - {behavior}");
+                }
+
+            }
+            // ReversalAnalysis.AnalyzeReversalsWithIndicators(quotes);
+        }
+
+        private static async Task BackTestVariants()
+        {
             var sb = new StringBuilder();
-            var numberOfVariants = 30;
+            var numberOfVariants = 10;
 
             var tasks = new List<Task<(TradingStrategyBase strategy, string result)>>{
 
@@ -71,9 +111,7 @@ namespace BitBetMatic
                 new BackTesting(new BitvavoApi()).DoBacktestTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
             };
 
-                await Task.WhenAll(tasks);
-
-            return new OkObjectResult("");
+            await Task.WhenAll(tasks);
         }
     }
 

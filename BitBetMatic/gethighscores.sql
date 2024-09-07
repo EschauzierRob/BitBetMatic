@@ -5,7 +5,7 @@ WITH RankedThresholds AS (
         [Market],
         [CreatedAt],
         [Highscore],
-        ROW_NUMBER() OVER (PARTITION BY [Strategy], [Market] ORDER BY [Highscore] DESC) AS rn
+        ROW_NUMBER() OVER (PARTITION BY [Strategy], [Market] ORDER BY [CreatedAt] DESC) AS rn
     FROM 
         [dbo].[IndicatorThresholds]
 )
@@ -22,3 +22,7 @@ WHERE
 ORDER BY 
     [Market],
     [Highscore] DESC;
+
+
+
+	-- delete from IndicatorThresholds where Highscore > 1000

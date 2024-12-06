@@ -19,7 +19,7 @@ namespace BitBetMatic
         public (decimal amount, string action) CalculateOutcome(decimal currentPrice, int score, BuySellHold outcome, PortfolioManager portfolioManager, string market)
         {
             string action;
-            var percentagePerScore = Functions.ToDecimal(score / 1000d);
+            var percentagePerScore = Functions.ToDecimal(score * Thresholds.ScoreMultiplier / 1000d);
 
             var euroBalance = portfolioManager.GetCashBalance();
             var tokenBalance = portfolioManager.GetAssetTokenBalance(market);

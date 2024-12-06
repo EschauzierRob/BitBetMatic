@@ -102,6 +102,11 @@ namespace BitBetMatic.API
                 }
 
                 var response = await Client.ExecuteAsync(request);
+                if (response.Content == null)
+                {
+                    return null;
+                }
+
                 var candles = JsonConvert.DeserializeObject<dynamic>(response.Content);
 
                 List<Quote> quotes = new List<Quote>();

@@ -15,16 +15,19 @@ public class BackTesting
     public const string BtcMarket = "BTC-EUR";
     public const string EthMarket = "ETH-EUR";
 
+    private const double _maxDeviation = 5d;
+    private const decimal _startingBalance = 300.0m;
+
     public BackTesting(IApiWrapper api)
     {
         dataLoader = new DataLoader(api);
         indicatorThresholdPersistency = new IndicatorThresholdPersistency();
     }
 
-    private (ITradingStrategy strategy, decimal result, string resultText) RunBacktest(TradingStrategyBase strategy, string market, List<Quote> historicalData)
+    private (ITradingStrategy strategy, decimal result, string resultText, Metrics metrics) RunBacktest(TradingStrategyBase strategy, string market, List<Quote> historicalData)
     {
         var portfolioManager = new PortfolioManager();
-        portfolioManager.SetCash(300);
+        portfolioManager.SetCash(_startingBalance);
         var strategyExecutor = new StrategyExecutor(strategy);
 
         var tradeActions = strategyExecutor.ExecuteStrategy(market, historicalData, portfolioManager);
@@ -35,7 +38,10 @@ public class BackTesting
         }
 
         var resultAnalyzer = new ResultAnalyzer(strategy, tradeActions, portfolioManager);
-        return (strategy, portfolioManager.GetAccountTotal(), resultAnalyzer.Analyze());
+
+        var analises = resultAnalyzer.Analyze();
+
+        return (strategy, portfolioManager.GetAccountTotal(), analises.resultText, analises.metrics);
     }
 
     public async Task<(ITradingStrategy strategyBtc, ITradingStrategy strategyEth, string result)> RunBacktesting(StringBuilder sb)
@@ -55,17 +61,21 @@ public class BackTesting
     {
         var strategy = new TStrat();
 
-        var prices = GetHistoricalData(market, strategy.Interval(), DateTime.Today.AddDays(-15)).Result.Select(x => (double)x.Close);
+        var prices = dataLoader.LoadHistoricalData(market, strategy.Interval(), 1440, DateTime.Today.AddDays(-15), DateTime.Today).Result.Select(x => (double)x.Close);
         var decayRate = VolatilityCalculator.CalculateDecayRate(prices.ToList());
 
         var thresholds = await indicatorThresholdPersistency.GetLatestDecayedThresholdsAsync(strategy.GetType().Name, market, decayRate) ?? strategy.Thresholds;
 
-        strategy.Thresholds = thresholds;
+        if (thresholds != null)
+        {
+            strategy.Thresholds = thresholds;
+        }
 
         var (strat, highscore) = await GetMostPerformantStrategyVariant(strategy, sb, market, numberOfVariants);
 
-        if (highscore > strategy.Thresholds.Highscore)  
+        if (highscore > strategy.Thresholds.Highscore)
         {
+            sb.AppendLine($"SAVING NEW HIGHSCORE: {highscore} for {strat.GetType().Name} - {market}");
             strat.Thresholds.Market = market;
             strat.Thresholds.Strategy = strat.GetType().Name;
             strat.Thresholds.Highscore = highscore;
@@ -74,8 +84,8 @@ public class BackTesting
 
         string thresholdsWinner = JsonConvert.SerializeObject(((TStrat)strat).Thresholds);
 
-        sb.AppendLine("Thresholds: ");
-        sb.AppendLine(thresholdsWinner);
+        // sb.AppendLine("Thresholds: ");
+        // sb.AppendLine(thresholdsWinner);
 
         string resultString = sb.ToString();
         Console.Write(resultString);
@@ -97,6 +107,7 @@ public class BackTesting
         (ITradingStrategy strategy, decimal total) res = (strategies.First(), decimal.Zero);
         List<Quote> historicalData = await GetHistoricalData(market);
 
+
         foreach (var strat in strategies)
         {
             var thresholds = await indicatorThresholdPersistency.GetLatestThresholdsAsync(strat.GetType().Name, market) ?? strat.Thresholds;
@@ -109,6 +120,7 @@ public class BackTesting
                 res = (testRes.strategy, testRes.result);
             }
         }
+
         return res.strategy;
     }
     private async Task<List<Quote>> GetHistoricalData(string market, string interval = "1h", DateTime? start = null, DateTime? end = null)
@@ -121,7 +133,7 @@ public class BackTesting
 
     private async Task<(TradingStrategyBase strategy, decimal result)> GetMostPerformantStrategyVariant<TStrat>(TStrat strategy, StringBuilder sb, string market, int numberOfVariants) where TStrat : TradingStrategyBase, new()
     {
-        var thresholdVariants = GenerateThresholdVariations(strategy.Thresholds, numberOfVariants, 25d);
+        var thresholdVariants = GenerateThresholdVariations(strategy.Thresholds, numberOfVariants - 1, _maxDeviation);
         List<TStrat> strategies = new List<TStrat> { strategy };
 
         foreach (var thresholdVariant in thresholdVariants)
@@ -130,34 +142,33 @@ public class BackTesting
         }
 
         (TradingStrategyBase strategy, decimal total) res = (strategies.First(), decimal.Zero);
-        List<Task<(TStrat strategy, decimal result, string resultText)>> tasks = await RunMultiRangeHistoricalTesting(market, strategies, res, 360);
+        var tasks = await RunMultiRangeHistoricalTesting(market, strategies, res, 360);
 
         // Wacht op alle taken om te voltooien
         var results = await Task.WhenAll(tasks);
 
+        var runs = new List<(TStrat strat, Metrics Metrics, decimal result)>();
         // Verwerk de resultaten
         foreach (var testRes in results)
         {
-            sb.AppendLine(testRes.resultText);
-            if (res.total < testRes.result)
-            {
-                Console.WriteLine($"new highest: {testRes.result}");
-                res = (testRes.strategy, testRes.result);
-            }
+            runs.Add((testRes.strategy, testRes.metrics, testRes.result));
+            // sb.AppendLine(testRes.resultText);
         }
 
-        sb.AppendLine($"Winning variant of {nameof(res.strategy)} got a total result of {res.total}");
-        return res;
+        var winningMetrics = MetricsComparer.CompareMetricsWithResult(runs);
+
+        sb.AppendLine($"Winning variant of {winningMetrics.Strat.GetType().Name} got a total result of {winningMetrics.Result:F} and a combined score of {winningMetrics.Metrics.printableMetrics}");
+        return (winningMetrics.Strat, winningMetrics.Result);
     }
 
-    private async Task<List<Task<(TStrat strategy, decimal result, string resultText)>>> RunMultiRangeHistoricalTesting<TStrat>(string market, List<TStrat> strategies, (TradingStrategyBase strategy, decimal total) res, int longSpan = 360) where TStrat : TradingStrategyBase, new()
+    private async Task<List<Task<(TStrat strategy, decimal result, string resultText, Metrics metrics)>>> RunMultiRangeHistoricalTesting<TStrat>(string market, List<TStrat> strategies, (TradingStrategyBase strategy, decimal total) res, int longSpan = 360) where TStrat : TradingStrategyBase, new()
     {
         // Gebruik verschillende tijdspannes
         var historicalDataLong = await GetHistoricalData(market, res.strategy.Interval(), DateTime.Today.AddDays(-longSpan));
-        var historicalDataMedium = historicalDataLong.Where(x => x.Date > DateTime.Today.AddDays(-longSpan/2)).ToList();
-        var historicalDataShort = historicalDataMedium.Where(x => x.Date > DateTime.Today.AddDays(-longSpan/12)).ToList();
+        var historicalDataMedium = historicalDataLong.Where(x => x.Date > DateTime.Today.AddDays(-longSpan / 2)).ToList();
+        var historicalDataShort = historicalDataMedium.Where(x => x.Date > DateTime.Today.AddDays(-longSpan / 12)).ToList();
 
-        List<Task<(TStrat strategy, decimal result, string resultText)>> tasks = new List<Task<(TStrat strategy, decimal result, string resultText)>>();
+        List<Task<(TStrat strategy, decimal result, string resultText, Metrics metrics)>> tasks = new List<Task<(TStrat strategy, decimal result, string resultText, Metrics metrics)>>();
 
         // Run backtest for different time spans
         foreach (var strat in strategies)
@@ -174,9 +185,9 @@ public class BackTesting
 
                 // Combineer de teksten van de resultaten
                 string combinedText = $"{market} - SHORT: {shortTermResult.resultText}\nMEDIUM: {mediumTermResult.resultText}\nLONG: {longTermResult.resultText}\nCombined Result: {combinedResult}";
-                Console.WriteLine(combinedText);
+                // Console.WriteLine(combinedText);
 
-                return (strategy: strat, result: combinedResult, resultText: combinedText);
+                return (strategy: strat, result: combinedResult, resultText: combinedText, longTermResult.metrics);
             }));
         }
 
@@ -254,7 +265,7 @@ public class BackTesting
 
                 // SMA thresholds
                 SmaShortTerm = Math.Max(1, smaShortTerm),
-                SmaLongTerm = Math.Max(smaShortTerm+1, GetRandomIntWithinDeviation(baseThresholds.SmaLongTerm, maxDeviationPercentage)),
+                SmaLongTerm = Math.Max(smaShortTerm + 1, GetRandomIntWithinDeviation(baseThresholds.SmaLongTerm, maxDeviationPercentage)),
 
                 // Parabolic SAR thresholds
                 ParabolicSarStep = Math.Max(0.005d, GetRandomDoubleWithinDeviation(baseThresholds.ParabolicSarStep, maxDeviationPercentage)),
@@ -279,7 +290,9 @@ public class BackTesting
 
                 // Buy/Sell thresholds
                 BuyThreshold = Math.Abs(GetRandomIntWithinDeviation(baseThresholds.BuyThreshold, maxDeviationPercentage)),
-                SellThreshold = Math.Abs(GetRandomIntWithinDeviation(baseThresholds.SellThreshold, maxDeviationPercentage))
+                SellThreshold = Math.Abs(GetRandomIntWithinDeviation(baseThresholds.SellThreshold, maxDeviationPercentage)),
+
+                ScoreMultiplier = GetRandomDoubleWithinDeviation(baseThresholds.ScoreMultiplier ?? 1, maxDeviationPercentage)
             };
         }
     }

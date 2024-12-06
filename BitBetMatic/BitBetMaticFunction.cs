@@ -41,9 +41,8 @@ namespace BitBetMatic
     public static class BitBetMaticBackTesting
     {
         [FunctionName("BitBetMaticBackTesting")]
-        public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
-            ILogger log)
+        public static async Task Run([TimerTrigger("0 */30 * * * *")] TimerInfo timer, ILogger log)
+        // public static async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req, ILogger log)
         {
             using (var context = new TradingDbContext())
             {
@@ -54,7 +53,7 @@ namespace BitBetMatic
             await BackTestVariants();
             // await FindPatterns();
 
-            return new OkObjectResult("");
+            // return new OkObjectResult("");
         }
 
         private static async Task FindPatterns()
@@ -109,6 +108,9 @@ namespace BitBetMatic
 
                 new BackTesting(new BitvavoApi()).DoBacktestTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
                 new BackTesting(new BitvavoApi()).DoBacktestTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
+
+                // new BackTesting(new BitvavoApi()).DoBacktestTuning<SimpleMAStrategy>(sb, BitBetMaticProcessor.BtcMarket, 0),
+                // new BackTesting(new BitvavoApi()).DoBacktestTuning<SimpleMAStrategy>(sb, BitBetMaticProcessor.EthMarket, 0),
             };
 
             await Task.WhenAll(tasks);

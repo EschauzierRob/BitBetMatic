@@ -39,7 +39,13 @@ public class IndicatorThresholdPersistency
             // Calculate DecayScore based on the age of the thresholds and Highscore
             var bestThresholds = await GetLatestThresholdsAsync(strategy, market);
 
+            if (bestThresholds == null) return null;
+
+            Console.WriteLine($"Raw highscore for {strategy} {market}: {bestThresholds?.Highscore ?? 0}");
+
             bestThresholds.Highscore = bestThresholds.Highscore * (decimal)Math.Exp(-decayRate * (DateTime.Now - bestThresholds.CreatedAt).TotalDays); // Decay score calculation
+
+            Console.WriteLine($"Decayed highscore for {strategy} {market}: {bestThresholds.Highscore}");
 
             return bestThresholds; // Return the best thresholds
         }

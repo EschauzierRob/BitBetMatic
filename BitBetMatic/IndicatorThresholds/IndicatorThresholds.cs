@@ -61,4 +61,5 @@ public class IndicatorThresholds
     public int MacdSignalPeriod { get; set; } = 9;
     public int AdxPeriod { get; set; } = 14;
     public int RocPeriod { get; set; } = 14;
+    public double? ScoreMultiplier { get; set; } = 1.0d;
 }

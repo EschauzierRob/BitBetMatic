@@ -24,7 +24,7 @@ public class BackTesting
         indicatorThresholdPersistency = new IndicatorThresholdPersistency();
     }
 
-    private (ITradingStrategy strategy, decimal result, string resultText, Metrics metrics) RunBacktest(TradingStrategyBase strategy, string market, List<Quote> historicalData)
+    private (ITradingStrategy strategy, decimal result, string resultText, Metrics metrics, TradeQuality tradeQuality) RunBacktest(TradingStrategyBase strategy, string market, List<Quote> historicalData)
     {
         var portfolioManager = new PortfolioManager();
         portfolioManager.SetCash(_startingBalance);
@@ -41,7 +41,7 @@ public class BackTesting
 
         var analises = resultAnalyzer.Analyze();
 
-        return (strategy, portfolioManager.GetAccountTotal(), analises.resultText, analises.metrics);
+        return (strategy, portfolioManager.GetAccountTotal(), analises.resultText, analises.metrics, analises.tradeQuality);
     }
 
     public async Task<(ITradingStrategy strategyBtc, ITradingStrategy strategyEth, string result)> RunBacktesting(StringBuilder sb)
@@ -147,28 +147,32 @@ public class BackTesting
         // Wacht op alle taken om te voltooien
         var results = await Task.WhenAll(tasks);
 
-        var runs = new List<(TStrat strat, Metrics Metrics, decimal result)>();
+        var runs = new List<(TStrat strat, TradeQuality tradeQuality, decimal result)>();
         // Verwerk de resultaten
         foreach (var testRes in results)
         {
-            runs.Add((testRes.strategy, testRes.metrics, testRes.result));
+            runs.Add((testRes.strategy, testRes.tradeQuality, testRes.result));
             // sb.AppendLine(testRes.resultText);
         }
 
-        var winningMetrics = MetricsComparer.CompareMetricsWithResult(runs);
+        // var winningMetrics = MetricsComparer.CompareMetricsWithResult(runs);
+        var rankedStratResults = MetricsComparer.RankStrategiesByScore(runs);
+        sb.AppendLine($"Winning variant of {rankedStratResults.Strategy.GetType().Name} got a total result of {rankedStratResults.FinalPortfolioValue:F} and a combined score of {rankedStratResults.Score}");
 
-        sb.AppendLine($"Winning variant of {winningMetrics.Strat.GetType().Name} got a total result of {winningMetrics.Result:F} and a combined score of {winningMetrics.Metrics.printableMetrics}");
-        return (winningMetrics.Strat, winningMetrics.Result);
+
+        // sb.AppendLine($"Winning variant of {winningMetrics.Strat.GetType().Name} got a total result of {winningMetrics.Result:F} and a combined score of {winningMetrics.Metrics.printableMetrics}");
+        // return (winningMetrics.Strat, winningMetrics.Result);
+        return (rankedStratResults.Strategy, rankedStratResults.FinalPortfolioValue);
     }
 
-    private async Task<List<Task<(TStrat strategy, decimal result, string resultText, Metrics metrics)>>> RunMultiRangeHistoricalTesting<TStrat>(string market, List<TStrat> strategies, (TradingStrategyBase strategy, decimal total) res, int longSpan = 360) where TStrat : TradingStrategyBase, new()
+    private async Task<List<Task<(TStrat strategy, decimal result, string resultText, TradeQuality tradeQuality)>>> RunMultiRangeHistoricalTesting<TStrat>(string market, List<TStrat> strategies, (TradingStrategyBase strategy, decimal total) res, int longSpan = 360) where TStrat : TradingStrategyBase, new()
     {
         // Gebruik verschillende tijdspannes
         var historicalDataLong = await GetHistoricalData(market, res.strategy.Interval(), DateTime.Today.AddDays(-longSpan));
         var historicalDataMedium = historicalDataLong.Where(x => x.Date > DateTime.Today.AddDays(-longSpan / 2)).ToList();
         var historicalDataShort = historicalDataMedium.Where(x => x.Date > DateTime.Today.AddDays(-longSpan / 12)).ToList();
 
-        List<Task<(TStrat strategy, decimal result, string resultText, Metrics metrics)>> tasks = new List<Task<(TStrat strategy, decimal result, string resultText, Metrics metrics)>>();
+        var tasks = new List<Task<(TStrat strategy, decimal result, string resultText, TradeQuality tradeQuality)>>();
 
         // Run backtest for different time spans
         foreach (var strat in strategies)
@@ -187,7 +191,7 @@ public class BackTesting
                 string combinedText = $"{market} - SHORT: {shortTermResult.resultText}\nMEDIUM: {mediumTermResult.resultText}\nLONG: {longTermResult.resultText}\nCombined Result: {combinedResult}";
                 // Console.WriteLine(combinedText);
 
-                return (strategy: strat, result: combinedResult, resultText: combinedText, longTermResult.metrics);
+                return (strategy: strat, result: combinedResult, resultText: combinedText, longTermResult.tradeQuality);
             }));
         }
 

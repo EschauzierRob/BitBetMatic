@@ -172,12 +172,55 @@ public class ResultAnalyzer
         return dailyReturns;
     }
 
+    public TradeQuality AnalyzeTradeQuality()
+    {
+        int correctTrades = 0;
+        decimal totalDelta = 0;
 
-    public (string resultText, Metrics metrics) Analyze()
+        var portfolioManager = new PortfolioManager();
+        portfolioManager.SetCash(300);
+        var trades = tradeActions.Where(t => t.Action == BuySellHold.Buy || t.Action == BuySellHold.Sell).ToList();
+
+        for (int i = 0; i < trades.Count - 1; i++)
+        {
+            portfolioManager.ExecuteTrade(trades[i]);
+
+            var currentTrade = trades[i];
+            var nextTrade = trades[i + 1];
+
+            var currentPortfolioValue = portfolioManager.GetAccountTotal();
+
+            if (currentTrade.Action == BuySellHold.Buy && nextTrade.CurrentTokenPrice > currentTrade.CurrentTokenPrice ||
+                currentTrade.Action == BuySellHold.Sell && nextTrade.CurrentTokenPrice < currentTrade.CurrentTokenPrice)
+            {
+                correctTrades++;
+                totalDelta += currentTrade.AmountInEuro / currentPortfolioValue * 100;
+            }
+        }
+
+        int totalTrades = trades.Count - 1;
+        decimal correctTradePercentage = totalTrades > 0 ? (decimal)correctTrades / totalTrades * 100 : 0;
+        decimal averageDelta = correctTrades > 0 ? totalDelta / correctTrades : 0;
+
+        return new TradeQuality
+        {
+            CorrectTradePercentage = correctTradePercentage,
+            AverageDelta = averageDelta,
+            TotalTrades = totalTrades,
+            CorrectTrades = correctTrades
+        };
+    }
+
+
+    public (string resultText, Metrics metrics, TradeQuality tradeQuality) Analyze()
     {
         decimal totalPortfolioValue = portfolioManager.GetAccountTotal();
 
         var metrics = CalculateMetrics();
+        var tradeQuality = AnalyzeTradeQuality();
+
+        // Console.WriteLine($"Correct Trade Percentage: {tradeQuality.CorrectTradePercentage:F2}%");
+        // Console.WriteLine($"Average Delta on Correct Trades: {tradeQuality.AverageDelta:F2}%");
 
         return ($@"
         Strategy: {tradingStrategy.GetType().Name}
@@ -186,7 +229,7 @@ public class ResultAnalyzer
         Maximum Drawdown: {metrics.MaximumDrawdown:P2}
         Profit Factor: {metrics.ProfitFactor:F2}
         Win/Loss Ratio: {metrics.WinLossRatio:F2}
-        ", metrics);
+        ", metrics, tradeQuality);
     }
 }
 
@@ -238,9 +281,66 @@ public class MetricsComparer
 
         return combinedRuns.FirstOrDefault();
     }
+    public static (TStrat Strategy, decimal Score, TradeQuality TradeQuality, decimal FinalPortfolioValue)
+        RankStrategiesByScore<TStrat>(
+            IEnumerable<(TStrat Strategy, TradeQuality TradeQuality, decimal FinalPortfolioValue)> strategyResults,
+            decimal tradeQualityWeight = 0.45m,
+            decimal averageDeltaWeight = 0.05m,
+            decimal portfolioValueWeight = 0.5m)
+        where TStrat : TradingStrategyBase, new()
+    {
+        // Bereken de hoogste waarden van TradeQuality en PortfolioValue
+        var maxTradeQuality = strategyResults.Max(r => r.TradeQuality.CorrectTradePercentage);
+        var maxDelta = strategyResults.Max(r => r.TradeQuality.AverageDelta);
+        var maxPortfolioValue = strategyResults.Max(r => r.FinalPortfolioValue);
+
+        // Rangschik strategieën op basis van de gewogen score
+        var rankedStrategies = strategyResults.Select(result =>
+        {
+            // Normaliseer scores
+            decimal normalizedTradeQuality = maxTradeQuality > 0
+                ? result.TradeQuality.CorrectTradePercentage / maxTradeQuality
+                : 0;
+            // Normaliseer scores
+            decimal normalizedAverageDelta = maxDelta > 0
+                ? result.TradeQuality.AverageDelta / maxDelta
+                : 0;
+            decimal normalizedPortfolioValue = maxPortfolioValue > 0
+                ? result.FinalPortfolioValue / maxPortfolioValue
+                : 0;
+
+            // Bereken totale score
+            decimal totalScore = (normalizedTradeQuality * tradeQualityWeight) +
+                                 (normalizedAverageDelta * averageDeltaWeight) +
+                                 (normalizedPortfolioValue * portfolioValueWeight);
+
+            return (result.Strategy, Score: totalScore, result.TradeQuality, result.FinalPortfolioValue);
+        })
+        .OrderByDescending(r => r.Score)
+        .ToList();
+
+        Console.WriteLine("Strategy Rankings:");
+        foreach (var ranked in rankedStrategies)
+        {
+            Console.WriteLine($"Strategy: {ranked.Strategy}, Score: {ranked.Score:F2}, " +
+                              $"Correct Trades: {ranked.TradeQuality.CorrectTradePercentage:F2}%, " +
+                              $"Average Delta: {ranked.TradeQuality.AverageDelta:F2}%, " +
+                              $"Final Portfolio: {ranked.FinalPortfolioValue:F2}");
+        }
+
+        // Retourneer de best scorende strategie
+        return rankedStrategies.FirstOrDefault();
+    }
 
 }
 
+public class TradeQuality
+{
+    public decimal CorrectTradePercentage { get; set; }
+    public decimal AverageDelta { get; set; }
+    public int TotalTrades { get; set; }
+    public int CorrectTrades { get; set; }
+}
 
 public class Metrics
 {

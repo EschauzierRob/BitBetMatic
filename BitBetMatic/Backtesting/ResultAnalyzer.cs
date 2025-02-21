@@ -92,6 +92,8 @@ public class ResultAnalyzer
             }
         }
 
+        heldQuantity = heldQuantity != 0 ? heldQuantity : 1;
+
         // Unrealized profit for open positions
         if (heldQuantity > 0)
         {

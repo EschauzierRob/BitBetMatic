@@ -157,8 +157,15 @@ public class BackTesting
 
         // var winningMetrics = MetricsComparer.CompareMetricsWithResult(runs);
         var rankedStratResults = MetricsComparer.RankStrategiesByScore(runs);
-        sb.AppendLine($"Winning variant of {rankedStratResults.Strategy.GetType().Name} got a total result of {rankedStratResults.FinalPortfolioValue:F} and a combined score of {rankedStratResults.Score}");
+        sb.AppendLine($"Winning variant of {rankedStratResults.Strategy.GetType().Name} - {market} got a total result of {rankedStratResults.FinalPortfolioValue:F} and a combined score of {rankedStratResults.Score}");
 
+
+
+
+            Console.WriteLine($"Strategy: {rankedStratResults.Strategy}, Score: {rankedStratResults.Score:F2}, " +
+                              $"Correct Trades: {rankedStratResults.TradeQuality.CorrectTradePercentage:F2}%, " +
+                              $"Average Delta: {rankedStratResults.TradeQuality.AverageDelta:F2}%, " +
+                              $"Final Portfolio: {rankedStratResults.FinalPortfolioValue:F2}");
 
         // sb.AppendLine($"Winning variant of {winningMetrics.Strat.GetType().Name} got a total result of {winningMetrics.Result:F} and a combined score of {winningMetrics.Metrics.printableMetrics}");
         // return (winningMetrics.Strat, winningMetrics.Result);
@@ -191,7 +198,7 @@ public class BackTesting
                 string combinedText = $"{market} - SHORT: {shortTermResult.resultText}\nMEDIUM: {mediumTermResult.resultText}\nLONG: {longTermResult.resultText}\nCombined Result: {combinedResult}";
                 // Console.WriteLine(combinedText);
 
-                return (strategy: strat, result: combinedResult, resultText: combinedText, longTermResult.tradeQuality);
+                return (strategy: strat, result: combinedResult, resultText: combinedText, shortTermResult.tradeQuality);
             }));
         }
 

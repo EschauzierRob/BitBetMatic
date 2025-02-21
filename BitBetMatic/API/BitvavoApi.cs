@@ -19,13 +19,14 @@ namespace BitBetMatic.API
             Client = new RestClient(Environment.GetEnvironmentVariable("API_BASE_URL"));
         }
 
-        private void SetApiRequestHeaders(RestRequest request, string url, Method method, string body = "")
+        private void SetApiRequestHeaders(RestRequest request, string url, string body = "")
         {
             var timestamp = GetTime();
 
             request.AddHeader("Bitvavo-Access-Key", Environment.GetEnvironmentVariable("BITVAVO_API_KEY"));
-            request.AddHeader("Bitvavo-Access-Signature", GenerateSignature(timestamp, method.ToString().ToUpper(), url, body));
+            request.AddHeader("Bitvavo-Access-Signature", GenerateSignature(timestamp, request.Method.ToString().ToUpper(), url, body));
             AddTimeStampHeader(request, timestamp);
+            request.AddHeader("Bitvavo-Access-Window", 60000);
             request.AddHeader("Content-Type", "application/json");
         }
 
@@ -140,7 +141,7 @@ namespace BitBetMatic.API
                 var url = "balance";
                 var method = Method.Get;
                 var request = new RestRequest(url, method);
-                SetApiRequestHeaders(request, url, method, "");
+                SetApiRequestHeaders(request, url, "");
                 var response = await Client.ExecuteAsync(request);
                 if (response.IsSuccessful)
                 {
@@ -178,7 +179,7 @@ namespace BitBetMatic.API
                 };
                 var request = new RestRequest(url, method);
                 request.AddJsonBody(body);
-                SetApiRequestHeaders(request, url, method, JsonConvert.SerializeObject(body));
+                SetApiRequestHeaders(request, url, JsonConvert.SerializeObject(body));
                 var response = await Client.ExecuteAsync(request);
                 if (response.IsSuccessful)
                 {
@@ -210,7 +211,7 @@ namespace BitBetMatic.API
             Console.WriteLine($"Requesting BitVavo GET Market endpoint for {market}");
             var url = $"markets/?market={market}";
             var request = new RestRequest(url, Method.Get);
-            SetApiRequestHeaders(request, url, Method.Get);
+            SetApiRequestHeaders(request, url);
 
             var response = await Client.ExecuteAsync(request);
             if (response.IsSuccessful)
@@ -238,6 +239,29 @@ namespace BitBetMatic.API
 
             var marketDataList = JsonConvert.DeserializeObject<List<MarketData>>(response.Content);
             return marketDataList;
+        }
+
+
+        public async Task<List<TradeData>> GetTradeData(string market)
+        {
+            Console.WriteLine($"Requesting BitVavo GET Trades endpoint for {market}");
+            var url = $"trades/?market={market}";
+            var request = new RestRequest(url, Method.Get);
+            SetApiRequestHeaders(request, url);
+
+            var response = await Client.ExecuteAsync(request);
+            
+            if (!response.IsSuccessful)
+            {
+                throw new Exception($"Error retrieving trades data: {response.Content}");
+            }
+
+            var result = JsonConvert.DeserializeObject<List<TradeData>>(response.Content);
+            return result;
+        }
+        public Task<List<Quote>> GetPortfolioData()
+        {
+            throw new NotImplementedException();
         }
 
 

@@ -26,8 +26,9 @@ namespace BitBetMatic
             sb.AppendLine($"\nTrading advice:\n");
 
             // var markets = GetMarkets(false);
-            await EnactStrategy(transact, sb, new List<string> { BtcMarket }, btcStrategy);
-            await EnactStrategy(transact, sb, new List<string> { EthMarket }, ethStrategy);
+            var balances = await api.GetBalances();
+            await EnactStrategy(balances, transact, sb, new List<string> { BtcMarket }, btcStrategy);
+            await EnactStrategy(balances, transact, sb, new List<string> { EthMarket }, ethStrategy);
 
             string result = sb.ToString();
             Console.Write(result);
@@ -35,12 +36,11 @@ namespace BitBetMatic
             return result;
         }
 
-        private async Task EnactStrategy(bool transact, StringBuilder sb, List<string> markets, ITradingStrategy strategy)
+        private async Task EnactStrategy(List<Balance> balances, bool transact, StringBuilder sb, List<string> markets, ITradingStrategy strategy)
         {
             var analyses = new Dictionary<string, (BuySellHold Signal, int Score)>();
             sb.AppendLine($"\nEnacting strategy '{strategy.GetType().Name}':\n");
 
-            var balances = await api.GetBalances();
             var euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
 
             foreach (var market in markets)

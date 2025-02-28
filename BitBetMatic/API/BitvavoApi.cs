@@ -1,12 +1,12 @@
-using Newtonsoft.Json;
-using RestSharp;
-using Skender.Stock.Indicators;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using RestSharp;
+using Skender.Stock.Indicators;
 
 namespace BitBetMatic.API
 {
@@ -250,7 +250,7 @@ namespace BitBetMatic.API
             SetApiRequestHeaders(request, url);
 
             var response = await Client.ExecuteAsync(request);
-            
+
             if (!response.IsSuccessful)
             {
                 throw new Exception($"Error retrieving trades data: {response.Content}");

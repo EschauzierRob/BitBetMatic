@@ -15,7 +15,7 @@ public class BackTesting
     public const string BtcMarket = "BTC-EUR";
     public const string EthMarket = "ETH-EUR";
 
-    private const double _maxDeviation = 5d;
+    private const double _maxDeviation = 50d;
     private const decimal _startingBalance = 300.0m;
 
     public BackTesting(IApiWrapper api)
@@ -92,6 +92,44 @@ public class BackTesting
 
         return (strat, resultString);
     }
+    public async Task<(TradingStrategyBase strategy, string result)> DoBacktestDeepTuning<TStrat>(StringBuilder sb, string market, int numberOfVariants = 20) where TStrat : TradingStrategyBase, new()
+    {
+        var strategy = new TStrat();
+
+        var prices = dataLoader.LoadHistoricalData(market, strategy.Interval(), 1440, DateTime.Today.AddDays(-15), DateTime.Today).Result.Select(x => (double)x.Close);
+        var decayRate = VolatilityCalculator.CalculateDecayRate(prices.ToList());
+
+        var thresholds = await indicatorThresholdPersistency.GetLatestDecayedThresholdsAsync(strategy.GetType().Name, market, decayRate) ?? strategy.Thresholds;
+
+        if (thresholds != null)
+        {
+            strategy.Thresholds = thresholds;
+        }
+
+        var (strat, highscore) = await GetMostPerformantStrategyVariant(strategy, sb, market, numberOfVariants, 50d);
+        (strat, highscore) = await GetMostPerformantStrategyVariant(strat, sb, market, numberOfVariants, 25d);
+        (strat, highscore) = await GetMostPerformantStrategyVariant(strat, sb, market, numberOfVariants, 10d);
+        (strat, highscore) = await GetMostPerformantStrategyVariant(strat, sb, market, numberOfVariants, 5d);
+
+        if (highscore > strategy.Thresholds.Highscore)
+        {
+            sb.AppendLine($"SAVING NEW HIGHSCORE: {highscore} for {strat.GetType().Name} - {market}");
+            strat.Thresholds.Market = market;
+            strat.Thresholds.Strategy = strat.GetType().Name;
+            strat.Thresholds.Highscore = highscore;
+            await indicatorThresholdPersistency.InsertThresholdsAsync(strat.Thresholds);
+        }
+
+        string thresholdsWinner = JsonConvert.SerializeObject(((TStrat)strat).Thresholds);
+
+        // sb.AppendLine("Thresholds: ");
+        // sb.AppendLine(thresholdsWinner);
+
+        string resultString = sb.ToString();
+        Console.Write(resultString);
+
+        return (strat, resultString);
+    }
 
     private async Task<ITradingStrategy> GetMostPerformantStrategy(StringBuilder sb, string market)
     {
@@ -131,9 +169,9 @@ public class BackTesting
         return historicalData;
     }
 
-    private async Task<(TradingStrategyBase strategy, decimal result)> GetMostPerformantStrategyVariant<TStrat>(TStrat strategy, StringBuilder sb, string market, int numberOfVariants) where TStrat : TradingStrategyBase, new()
+    private async Task<(TStrat strategy, decimal result)> GetMostPerformantStrategyVariant<TStrat>(TStrat strategy, StringBuilder sb, string market, int numberOfVariants, double maxDeviation = _maxDeviation) where TStrat : TradingStrategyBase, new()
     {
-        var thresholdVariants = GenerateThresholdVariations(strategy.Thresholds, numberOfVariants - 1, _maxDeviation);
+        var thresholdVariants = GenerateThresholdVariations(strategy.Thresholds, numberOfVariants - 1, maxDeviation);
         List<TStrat> strategies = new List<TStrat> { strategy };
 
         foreach (var thresholdVariant in thresholdVariants)
@@ -162,10 +200,10 @@ public class BackTesting
 
 
 
-            Console.WriteLine($"Strategy: {rankedStratResults.Strategy}, Score: {rankedStratResults.Score:F2}, " +
-                              $"Correct Trades: {rankedStratResults.TradeQuality.CorrectTradePercentage:F2}%, " +
-                              $"Average Delta: {rankedStratResults.TradeQuality.AverageDelta:F2}%, " +
-                              $"Final Portfolio: {rankedStratResults.FinalPortfolioValue:F2}");
+        Console.WriteLine($"Strategy: {rankedStratResults.Strategy}, Score: {rankedStratResults.Score:F2}, " +
+                          $"Correct Trades: {rankedStratResults.TradeQuality.CorrectTradePercentage:F2}%, " +
+                          $"Average Delta: {rankedStratResults.TradeQuality.AverageDelta:F2}%, " +
+                          $"Final Portfolio: {rankedStratResults.FinalPortfolioValue:F2}");
 
         // sb.AppendLine($"Winning variant of {winningMetrics.Strat.GetType().Name} got a total result of {winningMetrics.Result:F} and a combined score of {winningMetrics.Metrics.printableMetrics}");
         // return (winningMetrics.Strat, winningMetrics.Result);

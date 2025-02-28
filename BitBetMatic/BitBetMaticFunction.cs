@@ -105,24 +105,24 @@ namespace BitBetMatic
         public static async Task BackTestVariants()
         {
             var sb = new StringBuilder();
-            var numberOfVariants = 10;
+            var numberOfVariants = 3;
 
             var tasks = new List<Task<(TradingStrategyBase strategy, string result)>>{
 
-                new BackTesting(new BitvavoApi()).DoBacktestTuning<ModerateStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
-                new BackTesting(new BitvavoApi()).DoBacktestTuning<ModerateStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<ModerateStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<ModerateStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
 
-                new BackTesting(new BitvavoApi()).DoBacktestTuning<AgressiveStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
-                new BackTesting(new BitvavoApi()).DoBacktestTuning<AgressiveStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<AgressiveStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<AgressiveStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
 
-                new BackTesting(new BitvavoApi()).DoBacktestTuning<ScoredStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
-                // new BackTesting(new BitvavoApi()).DoBacktestTuning<ScoredStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<ScoredStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<ScoredStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
 
-                new BackTesting(new BitvavoApi()).DoBacktestTuning<StoplossStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
-                new BackTesting(new BitvavoApi()).DoBacktestTuning<StoplossStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<StoplossStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<StoplossStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
 
-                // new BackTesting(new BitvavoApi()).DoBacktestTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
-                new BackTesting(new BitvavoApi()).DoBacktestTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
 
                 // new BackTesting(new BitvavoApi()).DoBacktestTuning<SimpleMAStrategy>(sb, BitBetMaticProcessor.BtcMarket, 0),
                 // new BackTesting(new BitvavoApi()).DoBacktestTuning<SimpleMAStrategy>(sb, BitBetMaticProcessor.EthMarket, 0),

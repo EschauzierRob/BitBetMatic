@@ -17,6 +17,17 @@ public class ResultAnalyzer
 
     private Metrics CalculateMetrics()
     {
+        if (tradeActions.Count == 0)
+        {
+            return new Metrics
+            {
+                SharpeRatio = 0,
+                MaximumDrawdown = 0,
+                ProfitFactor = 0,
+                WinLossRatio = 0,
+            };
+        }
+
         var portfolioValues = new List<decimal>();
         var portfolioManager = new PortfolioManager();
         portfolioManager.SetCash(300);
@@ -29,7 +40,7 @@ public class ResultAnalyzer
 
         // Sharpe Ratio
         var returns = CalculateDailyReturns(portfolioValues);
-        var averageReturn = returns.Average();
+        var averageReturn = returns.Count > 0 ? returns.Average() : 0;
         var riskFreeRate = 0.01m / 365; // Jaarlijks 1%, omgerekend naar dagelijks
         var volatility = (decimal)Math.Sqrt((double)CalculateVariance(returns));
         var sharpeRatio = volatility > 0 ? (averageReturn - riskFreeRate) / volatility : 0m;
@@ -129,7 +140,7 @@ public class ResultAnalyzer
     private decimal CalculateVariance(List<decimal> dailyReturns)
     {
         if (dailyReturns == null || dailyReturns.Count < 2)
-            throw new ArgumentException("Daily returns must contain at least two entries.");
+            return 0m;
 
         decimal mean = dailyReturns.Average();
         decimal variance = dailyReturns.Sum(r => (r - mean) * (r - mean)) / dailyReturns.Count;

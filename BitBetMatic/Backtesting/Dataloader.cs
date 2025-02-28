@@ -33,9 +33,9 @@ public class DataLoader
                 end = QuotesPerInterval[interval + market].Min(x => x.Date);
             }
             quotes = await _api.GetCandleData(market, interval, limit, start, end);
-            if (quotes == null)
+            if (quotes == null || quotes.Count == 0)
             {
-                quotes = await _api.GetCandleData(market, interval, limit, start, end);
+                break;
             }
 
             if (QuotesPerInterval.ContainsKey(interval + market))
@@ -48,6 +48,6 @@ public class DataLoader
             }
         }
 
-        return QuotesPerInterval[interval + market];
+        return QuotesPerInterval.ContainsKey(interval + market) ? QuotesPerInterval[interval + market] : null;
     }
 }

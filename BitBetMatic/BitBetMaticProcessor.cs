@@ -59,7 +59,7 @@ namespace BitBetMatic
             // First execute all sell orders
             foreach (var analysis in orderedAnalyses)
             {
-                var tokenBalance = balances.FirstOrDefault(x => x.symbol == Functions.GetSymbolFormMarket(analysis.market));
+                var tokenBalance = balances.FirstOrDefault(x => x.symbol == Functions.GetSymbolFromMarket(analysis.market));
                 PortfolioManager.SetCash(euroBalance.available);
                 var price = await api.GetPrice(analysis.market);
                 PortfolioManager.SetTokenBalance(analysis.market, tokenBalance.available, price);

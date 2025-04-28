@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using BitBetMatic.API;
-using Microsoft.AspNetCore.Mvc;
 using Skender.Stock.Indicators;
+using Microsoft.Azure.Functions.Worker.Http;
 
 public class BitvavoPerformanceProcessor
 {
@@ -19,7 +19,7 @@ public class BitvavoPerformanceProcessor
         portfolioManager = new PortfolioManager();
     }
 
-    public ContentResult ProcessPerformance(string market)
+    public string ProcessPerformance(string market)
     {
         var tradeDataBTC = GetTradeData(market).Result;
         var tradeDataETH = GetTradeData("ETH-EUR").Result;
@@ -34,13 +34,7 @@ public class BitvavoPerformanceProcessor
 
         // 4. Generate HTML with comparison chart
         var html = GenerateHtmlWithChart(new List<ChartValues>() { tradeDataBTC.Item1, tradeDataETH.Item1 }, active);
-
-        return new ContentResult
-        {
-            Content = html,
-            ContentType = "text/html",
-            StatusCode = 200
-        };
+        return html;
     }
 
     private async Task<(ChartValues, List<(string, TradeData)>)> GetTradeData(string market)
@@ -60,7 +54,7 @@ public class BitvavoPerformanceProcessor
     }
 
 
-    private ChartValues CalculateBaseline(List<Quote> btcPriceData, double initialInvestment)
+    private ChartValues CalculateBaseline(List<FlaggedQuote> btcPriceData, double initialInvestment)
     {
         btcPriceData.OrderBy(x => x.Date);
         var btcPriceAtStart = Convert.ToDouble(btcPriceData.Last().Close); // Use the close price of the first data point

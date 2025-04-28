@@ -24,10 +24,13 @@ public class BackTesting
         indicatorThresholdPersistency = new IndicatorThresholdPersistency();
     }
 
-    private (ITradingStrategy strategy, decimal result, string resultText, Metrics metrics, TradeQuality tradeQuality) RunBacktest(TradingStrategyBase strategy, string market, List<Quote> historicalData)
+    private (ITradingStrategy strategy, decimal result, string resultText, Metrics metrics, TradeQuality tradeQuality) RunBacktest(TradingStrategyBase strategy, string market, List<FlaggedQuote> historicalData)
     {
         var portfolioManager = new PortfolioManager();
-        portfolioManager.SetCash(_startingBalance);
+        portfolioManager.SetCash(_startingBalance / 2);
+
+        var lastClose = historicalData.First().Close;
+        portfolioManager.SetTokenBalance(market, _startingBalance / 2 / lastClose, lastClose);
         var strategyExecutor = new StrategyExecutor(strategy);
 
         var tradeActions = strategyExecutor.ExecuteStrategy(market, historicalData, portfolioManager);
@@ -106,8 +109,7 @@ public class BackTesting
             strategy.Thresholds = thresholds;
         }
 
-        var (strat, highscore) = await GetMostPerformantStrategyVariant(strategy, sb, market, numberOfVariants, 50d);
-        (strat, highscore) = await GetMostPerformantStrategyVariant(strat, sb, market, numberOfVariants, 25d);
+        var (strat, highscore) = await GetMostPerformantStrategyVariant(strategy, sb, market, numberOfVariants, 25d);
         (strat, highscore) = await GetMostPerformantStrategyVariant(strat, sb, market, numberOfVariants, 10d);
         (strat, highscore) = await GetMostPerformantStrategyVariant(strat, sb, market, numberOfVariants, 5d);
 
@@ -143,7 +145,7 @@ public class BackTesting
                 new HoldStrategy()
                 };
         (ITradingStrategy strategy, decimal total) res = (strategies.First(), decimal.Zero);
-        List<Quote> historicalData = await GetHistoricalData(market);
+        var historicalData = await GetHistoricalData(market);
 
 
         foreach (var strat in strategies)
@@ -161,7 +163,7 @@ public class BackTesting
 
         return res.strategy;
     }
-    private async Task<List<Quote>> GetHistoricalData(string market, string interval = "1h", DateTime? start = null, DateTime? end = null)
+    private async Task<List<FlaggedQuote>> GetHistoricalData(string market, string interval = "1h", DateTime? start = null, DateTime? end = null)
     {
         start ??= DateTime.Today.AddDays(-60);
         end ??= DateTime.Today;
@@ -271,26 +273,27 @@ public class BackTesting
     {
         var random = new Random();
 
+        // Calculate percentage-based deviation ranges
+        int GetRandomIntWithinDeviation(int baseValue, double percentage)
+        {
+            int deviation = (int)Math.Round(Math.Abs(baseValue) * percentage / 100.0);
+            return baseValue + random.Next(-deviation, deviation + 1);
+        }
+
+        decimal GetRandomDecimalWithinDeviation(decimal baseValue, double percentage)
+        {
+            decimal deviation = Math.Abs(baseValue) * (decimal)percentage / 100.0m;
+            return baseValue + ((decimal)random.NextDouble() * 2 * deviation - deviation);
+        }
+
+        double GetRandomDoubleWithinDeviation(double baseValue, double percentage)
+        {
+            double deviation = Math.Abs(baseValue) * percentage / 100.0;
+            return baseValue + (random.NextDouble() * 2 * deviation - deviation);
+        }
+
         for (int i = 0; i < variationCount; i++)
         {
-            // Calculate percentage-based deviation ranges
-            int GetRandomIntWithinDeviation(int baseValue, double percentage)
-            {
-                int deviation = (int)Math.Round(Math.Abs(baseValue) * percentage / 100.0);
-                return baseValue + random.Next(-deviation, deviation + 1);
-            }
-
-            decimal GetRandomDecimalWithinDeviation(decimal baseValue, double percentage)
-            {
-                decimal deviation = Math.Abs(baseValue) * (decimal)percentage / 100.0m;
-                return baseValue + ((decimal)random.NextDouble() * 2 * deviation - deviation);
-            }
-
-            double GetRandomDoubleWithinDeviation(double baseValue, double percentage)
-            {
-                double deviation = Math.Abs(baseValue) * percentage / 100.0;
-                return baseValue + (random.NextDouble() * 2 * deviation - deviation);
-            }
 
             int macdFastPeriod = Math.Max(1, GetRandomIntWithinDeviation(baseThresholds.MacdFastPeriod, maxDeviationPercentage));
 

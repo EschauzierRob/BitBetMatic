@@ -1,9 +1,11 @@
 using System;
+using BitBetMatic.API;
 using Microsoft.EntityFrameworkCore;
 
 public class TradingDbContext : DbContext
 {
     public DbSet<IndicatorThresholds> IndicatorThresholds { get; set; }
+    public DbSet<FlaggedQuote> Candles { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {

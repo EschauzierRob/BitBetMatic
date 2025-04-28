@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BitBetMaticFunctions.Migrations
 {
     [DbContext(typeof(TradingDbContext))]
-    partial class TradingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250310160102_AddedCandleTable")]
+    partial class AddedCandleTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -40,9 +42,6 @@ namespace BitBetMaticFunctions.Migrations
 
                     b.Property<decimal>("Low")
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Market")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("Open")
                         .HasColumnType("decimal(18,2)");

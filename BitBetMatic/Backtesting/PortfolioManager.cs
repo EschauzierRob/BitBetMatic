@@ -6,11 +6,13 @@ public class PortfolioManager
 {
     private decimal _cashBalance;
     private decimal tradeMargin = 0.9975m;
+    private RiskOverlay riskOverlay;
     private Dictionary<string, (decimal tokenAmount, decimal currentPrice)> _assetBalances;
 
     public PortfolioManager()
     {
         _assetBalances = new Dictionary<string, (decimal tokenAmount, decimal currentPrice)>();
+        riskOverlay = new RiskOverlay(staticStopLossThreshold: 10m, trailingStopLossPercentage: 5m);
     }
 
     public void SetCash(decimal cash)
@@ -20,9 +22,9 @@ public class PortfolioManager
 
     public void ExecuteTrade(TradeAction action)
     {
-        if (action.AmountInEuro < 5 || !(action.Action == BuySellHold.Buy || action.Action == BuySellHold.Sell)) return;
-
         SetTokenCurrentPrice(action.Market, action.CurrentTokenPrice);
+
+        if (action.AmountInEuro < 5 || !(action.Action == BuySellHold.Buy || action.Action == BuySellHold.Sell)) return;
 
         var assetEuroBalance = GetAssetEuroBalance(action.Market);
         var amountInEuro = action.Action == BuySellHold.Buy ?
@@ -36,6 +38,8 @@ public class PortfolioManager
         {
             AddToTokenBalance(action, tokenAmount * tradeMargin);
             _cashBalance -= amountInEuro;
+
+            // riskOverlay.UpdateEntryPrice(action.CurrentTokenPrice);
 
             // assetEuroBalance = GetAssetEuroBalance(action.Market);
             // Console.WriteLine($"Buying {amountInEuro:F} {action.Market}, cash balance: {_cashBalance:F}, token balance: {assetEuroBalance:F}, total portfolio: {assetEuroBalance + _cashBalance:F}");
@@ -91,6 +95,12 @@ public class PortfolioManager
     {
         EnsureTokenExists(market);
         _assetBalances[market] = (_assetBalances[market].tokenAmount, close);
+
+        // riskOverlay.UpdatePrice(close);
+        // if (riskOverlay.ShouldSell(close))
+        // {
+        //     Console.WriteLine($"Sell of {market} triggered at price: {close}");
+        // }
     }
     public decimal GetCurrentTokenPrice(string market)
     {

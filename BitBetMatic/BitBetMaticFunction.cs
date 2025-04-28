@@ -1,77 +1,88 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using System.Threading.Tasks;
 using System;
-using System.Text;
-using Microsoft.EntityFrameworkCore;
-using BitBetMatic.API;
 using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using BitBetMatic.API;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Skender.Stock.Indicators;
+
 
 namespace BitBetMatic
 {
-    public static class BitBetMaticFunctionAtWill
+    public class BitBetMaticFunctionAtWill
     {
-        [FunctionName("BitBetMaticFunctionAtWill")]
-        public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
-            ILogger log)
+        [Function("BitBetMaticFunctionAtWill")]
+        public async Task<HttpResponseData> Run(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequestData req, FunctionContext funcContext)
         {
             using (var context = new TradingDbContext())
             {
                 context.Database.Migrate();
             }
 
-            log.LogInformation("C# HTTP trigger function processed a request.");
+            // var _logger = funcContext.GetLogger();
+
+            // Console.WriteLine("C# HTTP trigger function processed a request.");
             var sb = new StringBuilder();
             BitBetMaticProcessor bitBetMaticProcessor = new BitBetMaticProcessor();
             var backtestResult = await bitBetMaticProcessor.RunBacktesting(sb);
             var chosenStrategies = $"backtestResult: btcStrategy: {backtestResult.strategyBtc.GetType()}, ethStrategy: {backtestResult.strategyEth.GetType()}";
             Console.WriteLine(chosenStrategies);
             var processResult = await bitBetMaticProcessor.RunStrategies(backtestResult.strategyBtc, backtestResult.strategyEth, false);
-            log.LogInformation(backtestResult.result);
+            // Console.WriteLine(backtestResult.result);
 
+
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            response.Headers.Add("Content-Type", "application/json");
             // return result;
-            return new OkObjectResult(backtestResult + "\n\n" + chosenStrategies + "\n\n" + processResult);
+            await response.WriteStringAsync(JsonSerializer.Serialize(backtestResult + "\n\n" + chosenStrategies + "\n\n" + processResult));
+            return response;
         }
     }
-    public static class BitBetMaticBackTesting
+    public class BitBetMaticBackTesting
     {
-        [FunctionName("BitBetMaticBackTesting")]
-        public static async Task Run([TimerTrigger("0 */15 * * * *")] TimerInfo timer, ILogger log)
+        [Function("BitBetMaticBackTesting")]
+        public async Task RunAsync([TimerTrigger("0 */15 * * * *")] TimerInfo timer)
         {
             using (var context = new TradingDbContext())
             {
                 context.Database.Migrate();
             }
 
-            log.LogInformation("C# HTTP trigger function processed a request.");
-            await BitBetMaticBackTestingOnDemand.BackTestVariants();
+            Console.WriteLine("C# HTTP trigger function processed a request.");
+            await new BitBetMaticBackTestingOnDemand().BackTestVariants();
             // await FindPatterns();
 
         }
     }
-    public static class BitBetMaticBackTestingOnDemand
+    public class BitBetMaticBackTestingOnDemand
     {
-        [FunctionName("BitBetMaticBackTestingOnDemand")]
-        public static async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req, ILogger log)
+        [Function("BitBetMaticBackTestingOnDemand")]
+        public async Task<HttpResponseData> Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequestData req)
         {
             using (var context = new TradingDbContext())
             {
                 context.Database.Migrate();
             }
 
-            log.LogInformation("C# HTTP trigger function processed a request.");
+            Console.WriteLine("C# HTTP trigger function processed a request.");
             await BackTestVariants();
             // await FindPatterns();
 
-            return new OkObjectResult("");
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            response.Headers.Add("Content-Type", "application/json");
+            // return result;
+            await response.WriteStringAsync(JsonSerializer.Serialize(""));
+            return response;
         }
 
-        private static async Task FindPatterns()
+        private async Task FindPatterns()
         {
             // Voorbeeldlijst van Quotes
             var dataLoader = new DataLoader(new BitvavoApi());
@@ -80,12 +91,10 @@ namespace BitBetMatic
             var end = DateTime.Today;
             var historicalData = await dataLoader.LoadHistoricalData("ETH-EUR", "1h", 1440, start, end);
 
-            List<Quote> quotes = historicalData;
-
             int trendWindowSize = 2; // Aantal Quotes om te analyseren voor trends
             decimal trendThreshold = 5.0m; // Drempel voor procentuele verandering
 
-            var patterns = CandleExtensions.ClassifyPatterns(quotes, trendWindowSize, trendThreshold);
+            var patterns = CandleExtensions.ClassifyPatterns(historicalData, trendWindowSize, trendThreshold);
 
             // // Print patronen
             Console.WriteLine("Geïdentificeerde Patronen:");
@@ -99,67 +108,102 @@ namespace BitBetMatic
                 }
 
             }
-            // ReversalAnalysis.AnalyzeReversalsWithIndicators(quotes);
+            // ReversalAnalysis.AnalyzeReversalsWithIndicators(historicalData);
         }
 
-        public static async Task BackTestVariants()
+        public async Task BackTestVariants()
         {
             var sb = new StringBuilder();
-            var numberOfVariants = 3;
+            var numberOfVariants = 5;
 
-            var tasks = new List<Task<(TradingStrategyBase strategy, string result)>>{
+            var tasksModerateStrategy = new List<Task<(TradingStrategyBase strategy, string result)>>{
 
                 new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<ModerateStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
                 new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<ModerateStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
-
-                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<AgressiveStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
-                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<AgressiveStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
-
-                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<ScoredStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
-                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<ScoredStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
-
-                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<StoplossStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
-                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<StoplossStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
-
-                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
-                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
-
-                // new BackTesting(new BitvavoApi()).DoBacktestTuning<SimpleMAStrategy>(sb, BitBetMaticProcessor.BtcMarket, 0),
-                // new BackTesting(new BitvavoApi()).DoBacktestTuning<SimpleMAStrategy>(sb, BitBetMaticProcessor.EthMarket, 0),
             };
 
-            await Task.WhenAll(tasks);
+            await Task.WhenAll(tasksModerateStrategy);
+
+            var tasksAgressiveStrategy = new List<Task<(TradingStrategyBase strategy, string result)>>{
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<AgressiveStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<AgressiveStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
+            };
+
+            await Task.WhenAll(tasksAgressiveStrategy);
+
+            var tasksScoredStrategy = new List<Task<(TradingStrategyBase strategy, string result)>>{
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<ScoredStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<ScoredStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
+            };
+
+            await Task.WhenAll(tasksScoredStrategy);
+
+            var tasksStoplossStrategy = new List<Task<(TradingStrategyBase strategy, string result)>>{
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<StoplossStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<StoplossStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
+            };
+
+            await Task.WhenAll(tasksStoplossStrategy);
+
+            var tasksAdvancedStrategy = new List<Task<(TradingStrategyBase strategy, string result)>>{
+                new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.BtcMarket, numberOfVariants),
+                // new BackTesting(new BitvavoApi()).DoBacktestDeepTuning<AdvancedStrategy>(sb, BitBetMaticProcessor.EthMarket, numberOfVariants),
+            };
+
+            await Task.WhenAll(tasksAdvancedStrategy);
+
+            // new BackTesting(new BitvavoApi()).DoBacktestTuning<SimpleMAStrategy>(sb, BitBetMaticProcessor.BtcMarket, 0),
+            // new BackTesting(new BitvavoApi()).DoBacktestTuning<SimpleMAStrategy>(sb, BitBetMaticProcessor.EthMarket, 0),
         }
     }
 
-    public static class ComparePerformance
+    // public class ComparePerformance
+    // {
+    //     [Function("ComparePerformance")]
+    //     public async Task<HttpResponseData> Run(
+    //         [HttpTrigger(AuthorizationLevel.Function, "get", "post")] HttpRequestData req)
+    //     {
+    //         log.LogInformation("Fetching data from Bitvavo...");
+    //         return new BitvavoPerformanceProcessor(new BitvavoApi()).ProcessPerformance(BitBetMaticProcessor.BtcMarket);
+    //     }
+    // }
+
+    public class FindOptimalTrades
     {
-        [FunctionName("ComparePerformance")]
-        public static async Task<ContentResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", "post")] HttpRequest req, ILogger log)
+        [Function("FindOptimalTrades")]
+        public async Task<HttpResponseData> Run(
+            [HttpTrigger(AuthorizationLevel.Function, "get", "post")] HttpRequestData req)
         {
-            log.LogInformation("Fetching data from Bitvavo...");
-            return new BitvavoPerformanceProcessor(new BitvavoApi()).ProcessPerformance(BitBetMaticProcessor.BtcMarket);
+            Console.WriteLine("Fetching data from Bitvavo...");
+            var content = new OptimalTradeFinder().Run(new BitvavoApi());
+
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            response.Headers.Add("Content-Type", "application/json");
+            // return result;
+            await response.WriteStringAsync(JsonSerializer.Serialize(content));
+            return response;
         }
     }
 
-
-    public static class BitBetMaticFunction
+    public class BitBetMaticFunction
     {
-        [FunctionName("BitBetMaticFunction")]
-        public static async Task Run(
-            [TimerTrigger("0 */15 * * * *")] TimerInfo timer,
-            ILogger log)
+        [Function("BitBetMaticFunction")]
+        public async Task RunAsync([TimerTrigger("0 */15 * * * *")] TimerInfo timer)
         {
-            log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
+            using (var context = new TradingDbContext())
+            {
+                context.Database.Migrate();
+            }
+
+            Console.WriteLine($"C# Timer trigger function executed at: {DateTime.Now}");
             var sb = new StringBuilder();
             BitBetMaticProcessor bitBetMaticProcessor = new BitBetMaticProcessor();
             var backtestResult = await bitBetMaticProcessor.RunBacktesting(sb);
 
             Console.WriteLine($"backtestResult: btcStrategy: {backtestResult.strategyBtc.GetType()}, ethStrategy: {backtestResult.strategyEth.GetType()}");
             var processResult = await bitBetMaticProcessor.RunStrategies(backtestResult.strategyBtc, backtestResult.strategyEth);
-            log.LogInformation(backtestResult.result);
-            log.LogInformation(processResult);
+            Console.WriteLine(backtestResult.result);
+            Console.WriteLine(processResult);
         }
     }
 }

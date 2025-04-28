@@ -45,7 +45,7 @@ namespace BitBetMatic
 
             foreach (var market in markets)
             {
-                var quotes = await api.GetCandleData(market, strategy.Interval(), strategy.Limit());
+                var quotes = await api.GetCandleData(market, strategy.Interval(), strategy.Limit(), DateTime.Now.AddDays(-15), DateTime.Now);
                 var currentPrice = await api.GetPrice(market);
                 var analysis = strategy.AnalyzeMarket(market, quotes, currentPrice);
                 analyses.Add(market, analysis);

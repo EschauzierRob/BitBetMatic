@@ -1,6 +1,5 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using Skender.Stock.Indicators;
+using BitBetMatic.API;
 
 namespace BitBetMatic
 {
@@ -8,7 +7,7 @@ namespace BitBetMatic
     public interface ITradingStrategy
     {
         (decimal amount, string action) CalculateOutcome(decimal currentPrice, int score, BuySellHold outcome, PortfolioManager portfolioManager, string market);
-        (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<Quote> quotes, decimal currentPrice);
+        (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<FlaggedQuote> quotes, decimal currentPrice);
         string Interval(); 
         int Limit(); 
     }

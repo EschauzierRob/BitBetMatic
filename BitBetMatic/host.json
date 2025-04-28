@@ -8,5 +8,10 @@
             },
             "enableLiveMetricsFilters": true
         }
-    }, "functions": ["BitBetMaticFunction", "BitBetMaticBackTestingOnDemand", "ComparePerformance" ]
+    },
+    "functions": [
+        "BitBetMaticBackTestingOnDemand",
+        "ComparePerformance",
+        "FindOptimalTrades"
+    ]
 }

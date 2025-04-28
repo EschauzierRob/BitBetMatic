@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using BitBetMatic;
+using BitBetMatic.API;
 using Skender.Stock.Indicators;
 
 public class StrategyExecutor
@@ -13,7 +14,7 @@ public class StrategyExecutor
         _strategy = strategy;
     }
 
-    public List<TradeAction> ExecuteStrategy(string market, List<Quote> data, PortfolioManager portfolioManager)
+    public List<TradeAction> ExecuteStrategy(string market, List<FlaggedQuote> data, PortfolioManager portfolioManager)
     {
         var actions = new List<TradeAction>();
         var size = _strategy.Limit();

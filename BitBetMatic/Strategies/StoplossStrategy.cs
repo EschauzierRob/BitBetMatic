@@ -1,7 +1,8 @@
-using Skender.Stock.Indicators;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BitBetMatic.API;
+using Skender.Stock.Indicators;
 
 namespace BitBetMatic
 {
@@ -39,7 +40,7 @@ namespace BitBetMatic
             ;
         }
 
-        public override (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<Quote> quotes, decimal currentPrice)
+        public override (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<FlaggedQuote> quotes, decimal currentPrice)
         {
             // Bereken indicatoren
             var atr = quotes.GetAtr(14).LastOrDefault();

@@ -1,3 +1,4 @@
+using BitBetMatic.API;
 using Skender.Stock.Indicators;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -15,7 +16,7 @@ namespace BitBetMatic
             Thresholds = new IndicatorThresholds();
         }
 
-        public abstract (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<Quote> quotes, decimal currentPrice);
+        public abstract (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<FlaggedQuote> quotes, decimal currentPrice);
         public (decimal amount, string action) CalculateOutcome(decimal currentPrice, int score, BuySellHold outcome, PortfolioManager portfolioManager, string market)
         {
             string action;

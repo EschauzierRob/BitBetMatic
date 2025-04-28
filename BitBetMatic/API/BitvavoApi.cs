@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using RestSharp;
 using Skender.Stock.Indicators;
@@ -79,58 +81,156 @@ namespace BitBetMatic.API
             }
         }
 
-        public async Task<List<Quote>> GetCandleData(string market, string interval, int limit, DateTime? start = null, DateTime? end = null)
+        public async Task<List<FlaggedQuote>> GetCandleData(string market, string interval, int limit, DateTime start, DateTime end)
         {
-
             try
             {
-                Console.WriteLine($"Requesting BitVavo GET candels endpoint for market {market}");
+                using (var context = new TradingDbContext())
+                {
+                    Console.WriteLine($"Fetching candle data from database for {market}: {start} - {end}...");
+
+                    // Zorg dat start en end in UTC zijn
+                    start = DateTime.SpecifyKind(start, DateTimeKind.Utc);
+                    end = DateTime.SpecifyKind(end, DateTimeKind.Utc);
+
+                    // Ophalen van bestaande candles in de gevraagde periode
+                    var existingQuotes = GetExistingQuotes(context, market, start, end).Result;
+
+                    DateTime? earliestStoredCandle = existingQuotes.Keys.Count > 0 ? new DateTime(existingQuotes.Keys.Min()) : null;
+                    DateTime? latestStoredCandle = existingQuotes.Keys.Count > 0 ? new DateTime(existingQuotes.Keys.Max()) : null;
+
+                    var newQuotes = new List<FlaggedQuote>();
+
+                    // Stap 1: Backfill oudere candles als die ontbreken
+                    if (earliestStoredCandle == null || earliestStoredCandle > start)
+                    {
+                        DateTime fetchStart = start;
+                        DateTime fetchEnd = earliestStoredCandle?.AddSeconds(-1) ?? end; // Haal alleen ontbrekende op
+
+                        var fromBitVavo = await FetchCandlesFromBitVavo(market, interval, limit, fetchStart, fetchEnd);
+                        existingQuotes = GetExistingQuotes(context, market, start, end).Result;
+                        var newNewQuotes = fromBitVavo.Where(x => !existingQuotes.ContainsKey(x.Date.Ticks)).ToList();
+
+                        newQuotes.AddRange(newNewQuotes);
+
+                        // Update latestStoredCandle na toevoegen nieuwe data
+                        if (newNewQuotes.Count > 0)
+                            latestStoredCandle = newNewQuotes.Max(x => x.Date);
+                    }
+
+                    // Stap 2: Recente candles ophalen
+                    if (latestStoredCandle == null || latestStoredCandle < end)
+                    {
+                        DateTime fetchStart = latestStoredCandle?.AddSeconds(1) ?? start;
+
+                        var fromBitVavo = await FetchCandlesFromBitVavo(market, interval, limit, fetchStart, end);
+                        existingQuotes = GetExistingQuotes(context, market, start, end).Result;
+                        var newNewQuotes = fromBitVavo.Where(x => !existingQuotes.ContainsKey(x.Date.Ticks)).ToList();
+
+                        newQuotes.AddRange(newNewQuotes);
+                    }
+
+
+                    // 🔹 **Stap 3: Opslaan in database**
+                    if (newQuotes.Count > 0)
+                    {
+                        await context.Candles.AddRangeAsync(newQuotes);
+                        await context.SaveChangesAsync();
+                        Console.WriteLine($"Stored {newQuotes.Count} new candles in database.");
+                    } else {
+                        Console.WriteLine("No new candles from BitVavo to store...");
+                    }
+
+                    // Voeg nieuwe candles toe aan existingQuotes en return alles
+                    foreach (var quote in newQuotes)
+                    {
+                        existingQuotes[quote.Date.Ticks] = quote;
+                    }
+
+                    return existingQuotes.Values.ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting candle data for {market}: {ex.Message}");
+                throw;
+            }
+        }
+
+        private async Task<Dictionary<long, FlaggedQuote>> GetExistingQuotes(TradingDbContext context, string market, DateTime start,DateTime end) {
+            return await context.Candles
+                        .Where(x => x.Market == market && x.Date >= start && x.Date <= end)
+                        .ToDictionaryAsync(x => x.Date.Ticks);
+        }
+
+        private async Task<List<FlaggedQuote>> FetchCandlesFromBitVavo(string market, string interval, int limit, DateTime start, DateTime end)
+        {
+            var newQuotes = new List<FlaggedQuote>();
+
+            while (start < end)
+            {
+                Console.WriteLine($"Fetching candles from BitVavo: {start} - {end}");
+
+                start = DateTime.SpecifyKind(start, DateTimeKind.Utc);
+                end = DateTime.SpecifyKind(end, DateTimeKind.Utc);
+
+                limit = Math.Min(limit, Get15MinuteIntervals(start, end));
+                if (limit == 0) { return newQuotes; }
+
+                var startUtc = DateTime.SpecifyKind(start, DateTimeKind.Utc);
+                var endUtc = DateTime.SpecifyKind(end, DateTimeKind.Utc);
+
                 var request = new RestRequest($"{market}/candles", Method.Get);
                 request.AddParameter("interval", interval);
                 request.AddParameter("limit", limit);
-
-                if (start.HasValue)
-                {
-                    DateTimeOffset dto = new DateTimeOffset(start.Value);
-                    var startMilis = dto.ToUnixTimeMilliseconds().ToString();
-                    request.AddParameter("start", startMilis);
-                }
-                if (end.HasValue)
-                {
-                    DateTimeOffset dto = new DateTimeOffset(end.Value);
-                    var endMilis = dto.ToUnixTimeMilliseconds().ToString();
-                    request.AddParameter("end", endMilis);
-                }
+                request.AddParameter("start", new DateTimeOffset(startUtc).ToUnixTimeMilliseconds());
+                request.AddParameter("end", new DateTimeOffset(endUtc).ToUnixTimeMilliseconds());
 
                 var response = await Client.ExecuteAsync(request);
-                if (response.Content == null)
+
+                if (!response.IsSuccessful)
                 {
-                    return null;
+                    Console.WriteLine($"Warning: Error from BitVavo: {response.Content}");
+                    PrintRestRequest(request);
                 }
 
                 var candles = JsonConvert.DeserializeObject<dynamic>(response.Content);
-
-                List<Quote> quotes = new List<Quote>();
+                if (candles == null || candles.Count == 0)
+                {
+                    Console.WriteLine("No new candles found.");
+                    break;
+                }
 
                 foreach (var candle in candles)
                 {
-                    quotes.Add(new Quote
+                    var date = DateTimeOffset.FromUnixTimeMilliseconds((long)candle[0]).UtcDateTime; // Tijdzone fix
+                    date = DateTime.SpecifyKind(date, DateTimeKind.Utc);
+
+                    var quote = new FlaggedQuote
                     {
-                        Date = DateTimeOffset.FromUnixTimeMilliseconds((long)candle[0]).UtcDateTime,
+                        Date = date,
                         Open = (decimal)candle[1],
                         High = (decimal)candle[2],
                         Low = (decimal)candle[3],
                         Close = (decimal)candle[4],
-                        Volume = (decimal)candle[5]
-                    });
+                        Volume = (decimal)candle[5],
+                        Market = market
+                    };
+
+                    newQuotes.Add(quote);
                 }
 
-                return quotes;
+                if (newQuotes.Count == 0)
+                {
+                    Console.WriteLine("All fetched candles already exist. Exiting loop.");
+                    break;
+                }
+
+                // Start volgende fetch vanaf de laatst opgehaalde candle
+                end = newQuotes.Min(q => q.Date).AddSeconds(-1);
             }
-            catch (Exception ex)
-            {
-                throw new Exception($"Error getting candle data for {market}: {ex.Message}");
-            }
+
+            return newQuotes;
         }
 
         public async Task<List<Balance>> GetBalances()
@@ -259,15 +359,57 @@ namespace BitBetMatic.API
             var result = JsonConvert.DeserializeObject<List<TradeData>>(response.Content);
             return result;
         }
+
         public Task<List<Quote>> GetPortfolioData()
         {
             throw new NotImplementedException();
         }
 
-
         private string FormatAmount(decimal amount, int precision)
         {
             return amount.ToString($"F{precision}", CultureInfo.InvariantCulture);
+        }
+
+        private void PrintRestRequest(RestRequest request)
+        {
+            Console.WriteLine($"[DEBUG] Request: {request.Method} {request.Resource}");
+
+            foreach (var parameter in request.Parameters)
+            {
+                Console.WriteLine($"  - {parameter.Name}: {parameter.Value}");
+            }
+        }
+
+        static int Get15MinuteIntervals(DateTime start, DateTime end)
+        {
+            if (end < start)
+                throw new ArgumentException("End time must be after start time");
+
+            TimeSpan difference = end - start;
+            return (int)(difference.TotalMinutes / 15);
+        }
+    }
+
+    public class FlaggedQuote : Quote
+    {
+        public BuySellHold TradeAction { get; set; }
+        public int Id { get; set; }
+        public string Market { get; set; }
+
+        public FlaggedQuote()
+        {
+            TradeAction = BuySellHold.Hold;
+        }
+
+        public FlaggedQuote(Quote quote)
+        {
+            TradeAction = BuySellHold.Hold;
+            Open = quote.Open;
+            Close = quote.Close;
+            High = quote.High;
+            Low = quote.Low;
+            Date = quote.Date;
+            Volume = quote.Volume;
         }
     }
 

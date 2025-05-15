@@ -9,6 +9,7 @@
             "enableLiveMetricsFilters": true
         }
     },
+    "functionTimeout":"01:00:00",
     "functions": [
         "BitBetMaticBackTestingOnDemand",
         "ComparePerformance",

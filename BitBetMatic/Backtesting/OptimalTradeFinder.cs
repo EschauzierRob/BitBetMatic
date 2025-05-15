@@ -11,6 +11,8 @@ public class OptimalTradeFinder
     private const decimal SlippageFactor = 0.001m; // 0.1% slippage op buy/sell prijzen
     private const decimal MinProfitPercentage = 1m; // Minimale winstpercentage van 1%
 
+    public const string MODEL_PATH = "C:/Code/Crypto/BitBetMatic/ML_models/trade_seq_model.zip";
+
     public static (decimal maxProfit, List<(int buy, int sell)>) MaxProfit(int maxTransactions, List<FlaggedQuote> candles)
     {
         if (candles == null || candles.Count < 2 || maxTransactions < 1)
@@ -85,7 +87,7 @@ public class OptimalTradeFinder
 
     public string Run(IApiWrapper api)
     {
-        var candles = api.GetCandleData("BTC-EUR", "15m", 1440, new DateTime(2024, 10, 01), new DateTime(2024, 12, 31)).Result.Select(x => new FlaggedQuote(x)).ToList();
+        var candles = api.GetCandleData("BTC-EUR", "15m", 1440, new DateTime(2023, 06, 01), new DateTime(2025, 05, 01)).Result.Select(x => new FlaggedQuote(x)).ToList();
 
         int maxTransactions = candles.Count / 10;
         var (maxProfit, transactions) = MaxProfit(maxTransactions, candles);
@@ -113,7 +115,7 @@ public class OptimalTradeFinder
         var trainer = new MLTradeModelSequenceTrainer();
         var mlData = trainer.PrepareFromFlaggedQuotes(candles);
 
-        trainer.TrainModel(mlData, "trade_seq_model.zip");
+        trainer.TrainModel(mlData, MODEL_PATH);
 
         return $"{sb}\n\n{JsonConvert.SerializeObject(candles)}";
     }

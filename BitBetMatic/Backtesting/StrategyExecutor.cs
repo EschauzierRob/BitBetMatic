@@ -20,6 +20,10 @@ public class StrategyExecutor
         var size = _strategy.Limit();
         data = data.OrderBy(x => x.Date).ToList();
 
+        var buys = 0;
+        var sells = 0;
+        var holds = 0;
+
         for (var i = size; i <= data.Count; i++)
         {
             var candle = data.Skip(i - size).Take(size).ToList();
@@ -36,6 +40,10 @@ public class StrategyExecutor
                 Timestamp = candle.Last().Date
             };
             actions.Add(tradeAction);
+
+            if (analysis.Signal == BuySellHold.Buy) buys++;
+            else if (analysis.Signal == BuySellHold.Sell) sells++;
+            else if (analysis.Signal == BuySellHold.Hold) holds++;
 
             //Special case: if we use the HoldStrategy, we only want to buy 100% into the token at the start, and then just hold forever :D
             if (_strategy.GetType() == typeof(HoldStrategy) && portfolioManager.GetCashBalance() == 300)

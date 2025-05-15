@@ -36,7 +36,6 @@ namespace BitBetMatic
                 MacdSignalPeriod = 10,
                 AdxPeriod = 14,
                 RocPeriod = 12
-
             };
         }
         public override (BuySellHold Signal, int Score) AnalyzeMarket(string market, List<FlaggedQuote> quotes, decimal currentPrice)

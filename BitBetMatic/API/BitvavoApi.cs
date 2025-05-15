@@ -125,6 +125,7 @@ namespace BitBetMatic.API
 
                         var fromBitVavo = await FetchCandlesFromBitVavo(market, interval, limit, fetchStart, end);
                         existingQuotes = GetExistingQuotes(context, market, start, end).Result;
+                        
                         var newNewQuotes = fromBitVavo.Where(x => !existingQuotes.ContainsKey(x.Date.Ticks)).ToList();
 
                         newQuotes.AddRange(newNewQuotes);

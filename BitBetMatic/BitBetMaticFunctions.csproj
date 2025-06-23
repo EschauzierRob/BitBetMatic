@@ -15,6 +15,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="6.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.4" />
     <PackageReference Include="Microsoft.ML" Version="4.0.2" />
+    <PackageReference Include="Microsoft.ML.LightGbm" Version="4.0.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="RestSharp" Version="111.2.0" />
     <PackageReference Include="Skender.Stock.Indicators" Version="2.5.0" />

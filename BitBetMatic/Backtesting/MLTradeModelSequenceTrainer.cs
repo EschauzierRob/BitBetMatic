@@ -4,6 +4,7 @@ using System.Linq;
 using BitBetMatic.API;
 using Microsoft.ML;
 using Microsoft.ML.Data;
+using Microsoft.ML.Trainers.LightGbm;
 using Skender.Stock.Indicators;
 
 public class CandleData
@@ -40,10 +41,8 @@ public class MLTradeModelSequenceTrainer
     {
         mlContext = new MLContext(seed: 1);
     }
-
     public static CandleSequenceData CreateCandleSequenceDataFromQuotes(List<FlaggedQuote> quotes, IndicatorThresholds thresholds, uint? label)
     {
-        // Zorg dat je genoeg candles hebt
         int requiredCandles = Math.Max(
             Math.Max(thresholds.SmaLongTerm, thresholds.MacdSlowPeriod + thresholds.MacdSignalPeriod),
             Math.Max(thresholds.BollingerBandsPeriod, thresholds.AdxPeriod)
@@ -51,43 +50,60 @@ public class MLTradeModelSequenceTrainer
         if (quotes.Count < requiredCandles)
             throw new ArgumentException($"Niet genoeg candles. Minimaal nodig: {requiredCandles}, ontvangen: {quotes.Count}");
 
-        // 480-delige feature vector maken (bijv. 96 candles × 5 features)
         var recentQuotes = quotes.TakeLast(96).ToList();
-        float[] baseFeatures = recentQuotes.SelectMany(q => new float[]
-        {
-            (float)q.Open,
-            (float)q.High,
-            (float)q.Low,
-            (float)q.Close,
-            (float)q.Volume
-        }).ToArray();
+
+        // Gebruik de eerste Close als referentie voor prijs-normalisatie
+        double baseClose = (double)recentQuotes.First().Close;
+        double avgVolume = (double)recentQuotes.Average(q => q.Volume);
 
         float Safe(float? value) => value ?? 0f;
 
-        var ema50 = Safe((float)quotes.GetEma(thresholds.SmaShortTerm).LastOrDefault()?.Ema);
-        var ema200 = Safe((float)quotes.GetEma(thresholds.SmaLongTerm).LastOrDefault()?.Ema);
+        // Genormaliseerde candle features: relatieve bewegingen i.p.v. absolute prijzen
+        float[] baseFeatures = recentQuotes.SelectMany(q =>
+        {
+            float relOpen = (float)(((double)q.Open - baseClose) / baseClose);
+            float relHigh = (float)((q.High - q.Open) / q.Open);       // Hoogte t.o.v. open
+            float relLow = (float)((q.Low - q.Open) / q.Open);         // Diepte t.o.v. open
+            float relClose = (float)((q.Close - q.Open) / q.Open);     // Body%
+            float relVolume = (float)((double)q.Volume / avgVolume);          // Volume als % van gemiddelde
 
-        var rsi = Safe((float)quotes.GetRsi(thresholds.RsiPeriod).LastOrDefault()?.Rsi);
+            return new float[] { relOpen, relHigh, relLow, relClose, relVolume };
+        }).ToArray();
+
+        float ema50 = Safe((float)quotes.GetEma(thresholds.SmaShortTerm).LastOrDefault()?.Ema);
+        float ema200 = Safe((float)quotes.GetEma(thresholds.SmaLongTerm).LastOrDefault()?.Ema);
+        float rsi = Safe((float)quotes.GetRsi(thresholds.RsiPeriod).LastOrDefault()?.Rsi);
 
         var macdResult = quotes.GetMacd(thresholds.MacdFastPeriod, thresholds.MacdSlowPeriod, thresholds.MacdSignalPeriod).LastOrDefault();
-        var macd = Safe((float)macdResult?.Macd);
-        var macdSignal = Safe((float)macdResult?.Signal);
+        float macd = Safe((float)macdResult?.Macd);
+        float macdSignal = Safe((float)macdResult?.Signal);
 
         var bbResult = quotes.GetBollingerBands(thresholds.BollingerBandsPeriod, thresholds.BollingerBandsDeviation).LastOrDefault();
-        var bbUpper = Safe((float)bbResult?.UpperBand);
-        var bbLower = Safe((float)bbResult?.LowerBand);
+        float bbUpper = Safe((float)bbResult?.UpperBand);
+        float bbLower = Safe((float)bbResult?.LowerBand);
 
         var stochResult = quotes.GetStoch(thresholds.StochasticPeriod, thresholds.StochasticSignalPeriod).LastOrDefault();
-        var stochK = Safe((float)stochResult?.Oscillator);
-        var stochD = Safe((float)stochResult?.Signal);
+        float stochK = Safe((float)stochResult?.Oscillator);
+        float stochD = Safe((float)stochResult?.Signal);
 
-        var adx = Safe((float)quotes.GetAdx(thresholds.AdxPeriod).LastOrDefault()?.Adx);
+        float adx = Safe((float)quotes.GetAdx(thresholds.AdxPeriod).LastOrDefault()?.Adx);
 
+        // Relatieve indicatorfeatures
+        float latestClose = (float)recentQuotes.Last().Close;
         float[] extraFeatures =
         {
-            ema50, ema200, rsi, macd, macdSignal,
-            bbUpper, bbLower, stochK, stochD, adx
+            (ema50 - latestClose) / latestClose,
+            (ema200 - latestClose) / latestClose,
+            rsi / 100f,                     // RSI tussen 0-1
+            macd / latestClose,
+            macdSignal / latestClose,
+            (bbUpper - latestClose) / latestClose,
+            (bbLower - latestClose) / latestClose,
+            stochK / 100f,
+            stochD / 100f,
+            adx / 100f
         };
+
         float[] fullFeatureVector = baseFeatures.Concat(extraFeatures).ToArray();
 
         var sequenceData = new CandleSequenceData
@@ -96,16 +112,10 @@ public class MLTradeModelSequenceTrainer
         };
 
         if (label.HasValue)
-        {
             sequenceData.Label = label.Value;
-        }
 
         return sequenceData;
     }
-
-
-
-
 
     // Maakt een enkele featurevector
     public CandleSequenceData PrepareInput(List<CandleData> candles, uint label)
@@ -194,22 +204,35 @@ public class MLTradeModelSequenceTrainer
 
     public void TrainModel(IDataView dataView, string modelPath)
     {
-        var labelColumn = dataView.Schema["Label"];
-        Console.WriteLine($"Label type: {labelColumn.Type}");
-
         dataView = mlContext.Transforms.Conversion.ConvertType("Label", outputKind: DataKind.Double)
             .Fit(dataView)
             .Transform(dataView);
 
-        var balancedData = dataView;
-        // var balancedData = SplitData(dataView);
+        // var balancedData = dataView;
+        var balancedData = SplitData(dataView);
 
         var split = mlContext.Data.TrainTestSplit(balancedData, testFraction: 0.2);
 
+        var options = new LightGbmMulticlassTrainer.Options
+        {
+            NumberOfIterations = 1000,
+            LearningRate = 0.1,
+            NumberOfLeaves = 31,
+            MinimumExampleCountPerLeaf = 20,
+            MaximumBinCountPerFeature = 255,
+            UseCategoricalSplit = false,
+            Booster = new GradientBooster.Options
+            {
+                L2Regularization = 1.0,
+                L1Regularization = 0.5
+            },
+            EarlyStoppingRound = 50
+        };
+
         var pipeline = mlContext.Transforms.Conversion.MapValueToKey("Label")
-            .Append(mlContext.MulticlassClassification.Trainers.SdcaMaximumEntropy(labelColumnName: "Label", featureColumnName: "Features"))
-            .Append(mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"))
-            .Append(mlContext.Transforms.NormalizeMinMax("Features"));
+            .Append(mlContext.Transforms.NormalizeMinMax("Features"))
+            .Append(mlContext.MulticlassClassification.Trainers.LightGbm(options))
+            .Append(mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
 
         var model = pipeline.Fit(split.TrainSet);
 
@@ -218,6 +241,7 @@ public class MLTradeModelSequenceTrainer
 
         Console.WriteLine($"MacroAccuracy: {metrics.MacroAccuracy:F2}");
         Console.WriteLine($"MicroAccuracy: {metrics.MicroAccuracy:F2}");
+        Console.WriteLine($"ConfusionMatrix: {metrics.ConfusionMatrix:F2}");
         printLabelSplit(split);
 
         mlContext.Model.Save(model, dataView.Schema, modelPath);

@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using BitBetMatic.API;
+using System.Web;
 using BitBetMatic;
+using BitBetMatic.API;
 using Newtonsoft.Json;
 
 public class OptimalTradeFinder
@@ -89,34 +90,69 @@ public class OptimalTradeFinder
     {
         var candles = api.GetCandleData("BTC-EUR", "15m", 1440, new DateTime(2023, 06, 01), new DateTime(2025, 05, 01)).Result.Select(x => new FlaggedQuote(x)).ToList();
 
-        int maxTransactions = candles.Count / 10;
-        var (maxProfit, transactions) = MaxProfit(maxTransactions, candles);
+        const int lookahead = 20; // aantal candles in de toekomst om naar te kijken
+        const decimal minProfitPercentage = 1m; // minimum winstpercentage voor een buy
 
-        var initialValue = 300m;
-        var summedPercentage = 100m;
+        bool inPosition = false;
+        int lastSellIndex = -1;
 
-        var sb = new StringBuilder();
-        sb.AppendLine("Maximum achievable profit: " + maxProfit);
-        sb.AppendLine("Optimal transactions:");
-        foreach (var (buy, sell) in transactions)
+        for (int i = 0; i < candles.Count - lookahead; i++)
         {
-            candles[buy].TradeAction = BuySellHold.Buy;
-            candles[sell].TradeAction = BuySellHold.Sell;
+            if (inPosition || candles[i].TradeAction != BuySellHold.Hold)
+                continue;
 
-            decimal profit = candles[sell].Close - candles[buy].Close;
-            decimal percentage = (profit / candles[buy].Close) * 100;
+            var buyPrice = GetBuyPrice(candles[i]);
+            int bestSellIndex = -1;
+            decimal bestProfit = 0;
 
-            summedPercentage = summedPercentage *(1+(percentage/100));
+            for (int j = 1; j <= lookahead; j++)
+            {
+                int sellIndex = i + j;
+                if (sellIndex >= candles.Count)
+                    break;
 
-            sb.AppendLine($"Buy at index {buy} (price {candles[buy].Close}), Sell at index {sell} (price {candles[sell].Close}) -> {profit} euro ({percentage:F2}%) profit. inzet -> {initialValue*(summedPercentage/100):F2}, {summedPercentage:F2}%");
+                if (candles[sellIndex].TradeAction != BuySellHold.Hold)
+                    continue;
+
+                var sellPrice = GetSellPrice(candles[sellIndex]);
+                var profitPct = ProfitPercentage(buyPrice, sellPrice);
+
+                if (profitPct > bestProfit)
+                {
+                    bestProfit = profitPct;
+                    bestSellIndex = sellIndex;
+                }
+            }
+
+            if (bestProfit >= minProfitPercentage && bestSellIndex > i)
+            {
+                candles[i].TradeAction = BuySellHold.Buy;
+                candles[bestSellIndex].TradeAction = BuySellHold.Sell;
+
+                // overslaan tot na deze sell
+                i = bestSellIndex;
+                inPosition = false;
+                lastSellIndex = bestSellIndex;
+            }
         }
 
-        
+        // optioneel: debug output
+        var buys = candles.Count(c => c.TradeAction == BuySellHold.Buy);
+        var sells = candles.Count(c => c.TradeAction == BuySellHold.Sell);
+
         var trainer = new MLTradeModelSequenceTrainer();
         var mlData = trainer.PrepareFromFlaggedQuotes(candles);
-
         trainer.TrainModel(mlData, MODEL_PATH);
 
-        return $"{sb}\n\n{JsonConvert.SerializeObject(candles)}";
+        var serializerSettings = new JsonSerializerSettings()
+        {
+            StringEscapeHandling = StringEscapeHandling.EscapeHtml
+        };
+
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine($"Glijdend venster-labeling: {buys} buys, {sells} sells");
+        sb.AppendLine(HttpUtility.HtmlEncode(JsonConvert.SerializeObject(candles, serializerSettings)));
+
+        return sb.ToString();
     }
 }

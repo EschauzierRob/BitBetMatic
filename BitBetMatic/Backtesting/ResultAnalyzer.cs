@@ -83,26 +83,38 @@ public class ResultAnalyzer
         foreach (var action in tradeActions)
         {
             var quantity = action.AmountInEuro / action.CurrentTokenPrice;
+
             if (action.Action == BuySellHold.Buy)
             {
-                // Update cost and quantity for buys
                 totalCost += action.AmountInEuro;
                 heldQuantity += quantity;
             }
             else if (action.Action == BuySellHold.Sell && heldQuantity > 0)
             {
-                // Calculate realized profit for sells
-                decimal averageBuyPrice = totalCost / heldQuantity; // Weighted average buy price
-                decimal sellProfit = (quantity * action.CurrentTokenPrice) - (quantity * averageBuyPrice);
+                // Verkoop niet meer dan je hebt
+                var quantityToSell = Math.Min(quantity, heldQuantity);
+
+                if (quantityToSell <= 0)
+                    continue;
+
+                decimal averageBuyPrice = heldQuantity > 0 ? totalCost / heldQuantity : 0;
+
+                decimal sellRevenue = quantityToSell * action.CurrentTokenPrice;
+                decimal costBasis = quantityToSell * averageBuyPrice;
+                decimal sellProfit = sellRevenue - costBasis;
                 realizedProfit += sellProfit;
 
-                // Update total cost and held quantity
-                heldQuantity -= quantity;
-                totalCost -= quantity * averageBuyPrice;
-                totalSales += action.AmountInEuro;
+                heldQuantity -= quantityToSell;
+                totalCost -= costBasis;
+                totalSales += sellRevenue;
+
+                totalCost = Math.Round(totalCost, 10);
+
+                // Logging
+                if (heldQuantity < 0 || totalCost < 0)
+                    Console.WriteLine($"⚠️ Negatieve waarde: heldQuantity={heldQuantity}, totalCost={totalCost}");
             }
         }
-
         heldQuantity = heldQuantity != 0 ? heldQuantity : 1;
 
         // Unrealized profit for open positions

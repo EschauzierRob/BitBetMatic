@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using BitBetMatic.API;
+using BitBetMatic.Repositories;
 using Skender.Stock.Indicators;
 using Microsoft.Azure.Functions.Worker.Http;
 
@@ -12,10 +13,10 @@ public class BitvavoPerformanceProcessor
     private readonly DataLoader dataLoader;
     private readonly PortfolioManager portfolioManager;
 
-    public BitvavoPerformanceProcessor(IApiWrapper apiWrapper)
+    public BitvavoPerformanceProcessor(IApiWrapper apiWrapper, CandleRepository candleRepository)
     {
         api = apiWrapper;
-        dataLoader = new DataLoader(api);
+        dataLoader = new DataLoader(api, candleRepository);
         portfolioManager = new PortfolioManager();
     }
 

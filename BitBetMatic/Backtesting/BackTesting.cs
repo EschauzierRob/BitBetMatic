@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using BitBetMatic;
 using BitBetMatic.API;
+using BitBetMatic.Repositories;
 using Newtonsoft.Json;
 using Skender.Stock.Indicators;
 
@@ -18,9 +19,9 @@ public class BackTesting
     private const double _maxDeviation = 50d;
     private const decimal _startingBalance = 300.0m;
 
-    public BackTesting(IApiWrapper api)
+    public BackTesting(IApiWrapper api, CandleRepository candleRepository)
     {
-        dataLoader = new DataLoader(api);
+        dataLoader = new DataLoader(api, candleRepository);
         indicatorThresholdPersistency = new IndicatorThresholdPersistency();
     }
 

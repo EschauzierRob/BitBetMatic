@@ -5,7 +5,6 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using RestSharp;
 using Skender.Stock.Indicators;
@@ -85,83 +84,16 @@ namespace BitBetMatic.API
         {
             try
             {
-                using (var context = new TradingDbContext())
-                {
-                    Console.WriteLine($"Fetching candle data from database for {market}: {start} - {end}...");
+                start = DateTime.SpecifyKind(start, DateTimeKind.Utc);
+                end = DateTime.SpecifyKind(end, DateTimeKind.Utc);
 
-                    // Zorg dat start en end in UTC zijn
-                    start = DateTime.SpecifyKind(start, DateTimeKind.Utc);
-                    end = DateTime.SpecifyKind(end, DateTimeKind.Utc);
-
-                    // Ophalen van bestaande candles in de gevraagde periode
-                    var existingQuotes = GetExistingQuotes(context, market, start, end).Result;
-
-                    DateTime? earliestStoredCandle = existingQuotes.Keys.Count > 0 ? new DateTime(existingQuotes.Keys.Min()) : null;
-                    DateTime? latestStoredCandle = existingQuotes.Keys.Count > 0 ? new DateTime(existingQuotes.Keys.Max()) : null;
-
-                    var newQuotes = new List<FlaggedQuote>();
-
-                    // Stap 1: Backfill oudere candles als die ontbreken
-                    if (earliestStoredCandle == null || earliestStoredCandle > start)
-                    {
-                        DateTime fetchStart = start;
-                        DateTime fetchEnd = earliestStoredCandle?.AddSeconds(-1) ?? end; // Haal alleen ontbrekende op
-
-                        var fromBitVavo = await FetchCandlesFromBitVavo(market, interval, limit, fetchStart, fetchEnd);
-                        existingQuotes = GetExistingQuotes(context, market, start, end).Result;
-                        var newNewQuotes = fromBitVavo.Where(x => !existingQuotes.ContainsKey(x.Date.Ticks)).ToList();
-
-                        newQuotes.AddRange(newNewQuotes);
-
-                        // Update latestStoredCandle na toevoegen nieuwe data
-                        if (newNewQuotes.Count > 0)
-                            latestStoredCandle = newNewQuotes.Max(x => x.Date);
-                    }
-
-                    // Stap 2: Recente candles ophalen
-                    if (latestStoredCandle == null || latestStoredCandle < end)
-                    {
-                        DateTime fetchStart = latestStoredCandle?.AddSeconds(1) ?? start;
-
-                        var fromBitVavo = await FetchCandlesFromBitVavo(market, interval, limit, fetchStart, end);
-                        existingQuotes = GetExistingQuotes(context, market, start, end).Result;
-                        
-                        var newNewQuotes = fromBitVavo.Where(x => !existingQuotes.ContainsKey(x.Date.Ticks)).ToList();
-
-                        newQuotes.AddRange(newNewQuotes);
-                    }
-
-
-                    // 🔹 **Stap 3: Opslaan in database**
-                    if (newQuotes.Count > 0)
-                    {
-                        await context.Candles.AddRangeAsync(newQuotes);
-                        await context.SaveChangesAsync();
-                        Console.WriteLine($"Stored {newQuotes.Count} new candles in database.");
-                    } else {
-                        Console.WriteLine("No new candles from BitVavo to store...");
-                    }
-
-                    // Voeg nieuwe candles toe aan existingQuotes en return alles
-                    foreach (var quote in newQuotes)
-                    {
-                        existingQuotes[quote.Date.Ticks] = quote;
-                    }
-
-                    return existingQuotes.Values.ToList();
-                }
+                return await FetchCandlesFromBitVavo(market, interval, limit, start, end);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error getting candle data for {market}: {ex.Message}");
                 throw;
             }
-        }
-
-        private async Task<Dictionary<long, FlaggedQuote>> GetExistingQuotes(TradingDbContext context, string market, DateTime start,DateTime end) {
-            return await context.Candles
-                        .Where(x => x.Market == market && x.Date >= start && x.Date <= end)
-                        .ToDictionaryAsync(x => x.Date.Ticks);
         }
 
         private async Task<List<FlaggedQuote>> FetchCandlesFromBitVavo(string market, string interval, int limit, DateTime start, DateTime end)

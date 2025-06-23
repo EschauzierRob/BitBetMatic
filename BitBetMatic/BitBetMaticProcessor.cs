@@ -9,14 +9,17 @@ namespace BitBetMatic
 {
     public class BitBetMaticProcessor
     {
-        public BitBetMaticProcessor()
+        private readonly IApiWrapper api;
+        private readonly BackTesting backTesting;
+
+        public BitBetMaticProcessor(IApiWrapper apiWrapper, BackTesting backTesting)
         {
-            api = new BitvavoApi();
+            api = apiWrapper;
+            this.backTesting = backTesting;
         }
 
         public const string BtcMarket = "BTC-EUR";
         public const string EthMarket = "ETH-EUR";
-        private BitvavoApi api;
         private PortfolioManager PortfolioManager;
         public async Task<string> RunStrategies(ITradingStrategy btcStrategy, ITradingStrategy ethStrategy, bool transact = true)
         {
@@ -122,7 +125,6 @@ namespace BitBetMatic
 
         public async Task<(ITradingStrategy strategyBtc, ITradingStrategy strategyEth, string result)> RunBacktesting(StringBuilder sb)
         {
-            BackTesting backTesting = new BackTesting(api);
             return await backTesting.RunBacktesting(sb);
         }
     }

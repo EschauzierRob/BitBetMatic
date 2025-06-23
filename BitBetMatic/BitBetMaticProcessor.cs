@@ -1,4 +1,5 @@
 using BitBetMatic.API;
+using BitBetMatic.Repositories;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,14 +13,16 @@ namespace BitBetMatic
         private readonly IApiWrapper api;
         private readonly BackTesting backTesting;
 
-        public BitBetMaticProcessor(IApiWrapper apiWrapper, BackTesting backTesting)
+        public BitBetMaticProcessor(IApiWrapper apiWrapper, CandleRepository candleRepository, BackTesting backTesting)
         {
             api = apiWrapper;
+            candleRepository = candleRepository;
             this.backTesting = backTesting;
         }
 
         public const string BtcMarket = "BTC-EUR";
         public const string EthMarket = "ETH-EUR";
+        private CandleRepository candleRepository;
         private PortfolioManager PortfolioManager;
         public async Task<string> RunStrategies(ITradingStrategy btcStrategy, ITradingStrategy ethStrategy, bool transact = true)
         {
@@ -48,7 +51,14 @@ namespace BitBetMatic
 
             foreach (var market in markets)
             {
-                var quotes = await api.GetCandleData(market, strategy.Interval(), strategy.Limit(), DateTime.Now.AddDays(-15), DateTime.Now);
+                var quotes = await candleRepository.GetCandlesAsync(market, DateTime.Now.AddDays(-15), DateTime.Now);
+
+                if (quotes.Count == 0)
+                {
+                    quotes = await api.GetCandleData(market, strategy.Interval(), strategy.Limit(), DateTime.Now.AddDays(-15), DateTime.Now);
+                    await candleRepository.AddCandlesAsync(quotes);
+                }
+
                 var currentPrice = await api.GetPrice(market);
                 var analysis = strategy.AnalyzeMarket(market, quotes, currentPrice);
                 analyses.Add(market, analysis);
@@ -125,6 +135,7 @@ namespace BitBetMatic
 
         public async Task<(ITradingStrategy strategyBtc, ITradingStrategy strategyEth, string result)> RunBacktesting(StringBuilder sb)
         {
+            BackTesting backTesting = new BackTesting(api, candleRepository);
             return await backTesting.RunBacktesting(sb);
         }
     }

@@ -15,12 +15,12 @@ namespace BitBetMatic.API
     public class BitvavoApi : IApiWrapper
     {
         private readonly RestClient Client;
-        private readonly CandleRepository candleRepository;
+        private readonly ICandleRepository CandleRepository;
 
-        public BitvavoApi()
+        public BitvavoApi(ICandleRepository candleRepository)
         {
             Client = new RestClient(Environment.GetEnvironmentVariable("API_BASE_URL"));
-            candleRepository = new CandleRepository();
+            CandleRepository = candleRepository;
         }
 
         private void SetApiRequestHeaders(RestRequest request, string url, string body = "")
@@ -92,7 +92,7 @@ namespace BitBetMatic.API
 
                 Console.WriteLine($"Fetching candle data from database for {market}: {start} - {end}...");
 
-                var existingQuotes = (await candleRepository.GetCandlesAsync(market, start, end))
+                var existingQuotes = (await CandleRepository.GetCandlesAsync(market, start, end))
                     .ToDictionary(x => x.Date.Ticks);
 
                 DateTime? earliestStoredCandle = existingQuotes.Count > 0 ? new DateTime(existingQuotes.Keys.Min()) : null;
@@ -106,7 +106,7 @@ namespace BitBetMatic.API
                     DateTime fetchEnd = earliestStoredCandle?.AddSeconds(-1) ?? end;
 
                     var fromBitVavo = await FetchCandlesFromBitVavo(market, interval, limit, fetchStart, fetchEnd);
-                    existingQuotes = (await candleRepository.GetCandlesAsync(market, start, end))
+                    existingQuotes = (await CandleRepository.GetCandlesAsync(market, start, end))
                         .ToDictionary(x => x.Date.Ticks);
                     var newNewQuotes = fromBitVavo.Where(x => !existingQuotes.ContainsKey(x.Date.Ticks)).ToList();
 
@@ -121,7 +121,7 @@ namespace BitBetMatic.API
                     DateTime fetchStart = latestStoredCandle?.AddSeconds(1) ?? start;
 
                     var fromBitVavo = await FetchCandlesFromBitVavo(market, interval, limit, fetchStart, end);
-                    existingQuotes = (await candleRepository.GetCandlesAsync(market, start, end))
+                    existingQuotes = (await CandleRepository.GetCandlesAsync(market, start, end))
                         .ToDictionary(x => x.Date.Ticks);
 
                     var newNewQuotes = fromBitVavo.Where(x => !existingQuotes.ContainsKey(x.Date.Ticks)).ToList();
@@ -131,7 +131,7 @@ namespace BitBetMatic.API
 
                 if (newQuotes.Count > 0)
                 {
-                    await candleRepository.AddCandlesAsync(newQuotes);
+                    await CandleRepository.AddCandlesAsync(newQuotes);
                     Console.WriteLine($"Stored {newQuotes.Count} new candles in database.");
                 }
                 else

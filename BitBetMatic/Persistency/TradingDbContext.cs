@@ -10,7 +10,7 @@ public class TradingDbContext : DbContext
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         var connectionString = "Server=tcp:bitbetmatic-db.database.windows.net,1433;Initial Catalog=bitbetmatic-db;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=\"Active Directory Default\";";
-        if (string.IsNullOrEmpty(connectionString))
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DB_CONNECTION_STRING")))
         {
             throw new InvalidOperationException("Database connection string is not set.");
         }

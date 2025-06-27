@@ -83,7 +83,7 @@ public class OptimalTradeFinder
 
     private static decimal ProfitPercentage(decimal buy, decimal sell)
     {
-        return ((sell - buy) / buy) * 100;
+        return (sell - buy) / buy * 100;
     }
 
     public string Run(IApiWrapper api)

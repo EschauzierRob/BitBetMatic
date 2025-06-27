@@ -11,18 +11,18 @@ using Skender.Stock.Indicators;
 
 public class BackTesting
 {
-    private DataLoader dataLoader;
-    private IndicatorThresholdPersistency indicatorThresholdPersistency;
+    private readonly DataLoader DataLoader;
+    private readonly IndicatorThresholdPersistency IndicatorThresholdPersistency;
     public const string BtcMarket = "BTC-EUR";
     public const string EthMarket = "ETH-EUR";
 
     private const double _maxDeviation = 50d;
     private const decimal _startingBalance = 300.0m;
 
-    public BackTesting(IApiWrapper api, CandleRepository candleRepository)
+    public BackTesting(IApiWrapper api, ICandleRepository candleRepository)
     {
-        dataLoader = new DataLoader(api, candleRepository);
-        indicatorThresholdPersistency = new IndicatorThresholdPersistency();
+        DataLoader = new DataLoader(api, candleRepository);
+        IndicatorThresholdPersistency = new IndicatorThresholdPersistency();
     }
 
     private (ITradingStrategy strategy, decimal result, string resultText, Metrics metrics, TradeQuality tradeQuality) RunBacktest(TradingStrategyBase strategy, string market, List<FlaggedQuote> historicalData)
@@ -65,10 +65,10 @@ public class BackTesting
     {
         var strategy = new TStrat();
 
-        var prices = dataLoader.LoadHistoricalData(market, strategy.Interval(), 1440, DateTime.Today.AddDays(-15), DateTime.Today).Result.Select(x => (double)x.Close);
+        var prices = DataLoader.LoadHistoricalData(market, strategy.Interval(), 1440, DateTime.Today.AddDays(-15), DateTime.Today).Result.Select(x => (double)x.Close);
         var decayRate = VolatilityCalculator.CalculateDecayRate(prices.ToList());
 
-        var thresholds = await indicatorThresholdPersistency.GetLatestDecayedThresholdsAsync(strategy.GetType().Name, market, decayRate) ?? strategy.Thresholds;
+        var thresholds = await IndicatorThresholdPersistency.GetLatestDecayedThresholdsAsync(strategy.GetType().Name, market, decayRate) ?? strategy.Thresholds;
 
         if (thresholds != null)
         {
@@ -83,7 +83,7 @@ public class BackTesting
             strat.Thresholds.Market = market;
             strat.Thresholds.Strategy = strat.GetType().Name;
             strat.Thresholds.Highscore = highscore;
-            await indicatorThresholdPersistency.InsertThresholdsAsync(strat.Thresholds);
+            await IndicatorThresholdPersistency.InsertThresholdsAsync(strat.Thresholds);
         }
 
         string thresholdsWinner = JsonConvert.SerializeObject(((TStrat)strat).Thresholds);
@@ -100,10 +100,10 @@ public class BackTesting
     {
         var strategy = new TStrat();
 
-        var prices = dataLoader.LoadHistoricalData(market, strategy.Interval(), 1440, DateTime.Today.AddDays(-15), DateTime.Today).Result.Select(x => (double)x.Close);
+        var prices = DataLoader.LoadHistoricalData(market, strategy.Interval(), 1440, DateTime.Today.AddDays(-15), DateTime.Today).Result.Select(x => (double)x.Close);
         var decayRate = VolatilityCalculator.CalculateDecayRate(prices.ToList());
 
-        var thresholds = await indicatorThresholdPersistency.GetLatestDecayedThresholdsAsync(strategy.GetType().Name, market, decayRate) ?? strategy.Thresholds;
+        var thresholds = await IndicatorThresholdPersistency.GetLatestDecayedThresholdsAsync(strategy.GetType().Name, market, decayRate) ?? strategy.Thresholds;
 
         if (thresholds != null)
         {
@@ -120,7 +120,7 @@ public class BackTesting
             strat.Thresholds.Market = market;
             strat.Thresholds.Strategy = strat.GetType().Name;
             strat.Thresholds.Highscore = highscore;
-            await indicatorThresholdPersistency.InsertThresholdsAsync(strat.Thresholds);
+            await IndicatorThresholdPersistency.InsertThresholdsAsync(strat.Thresholds);
         }
 
         string thresholdsWinner = JsonConvert.SerializeObject(((TStrat)strat).Thresholds);
@@ -151,7 +151,7 @@ public class BackTesting
 
         foreach (var strat in strategies)
         {
-            var thresholds = await indicatorThresholdPersistency.GetLatestThresholdsAsync(strat.GetType().Name, market) ?? strat.Thresholds;
+            var thresholds = await IndicatorThresholdPersistency.GetLatestThresholdsAsync(strat.GetType().Name, market) ?? strat.Thresholds;
             strat.Thresholds = thresholds;
 
             var testRes = RunBacktest(strat, market, historicalData);
@@ -168,7 +168,7 @@ public class BackTesting
     {
         start ??= DateTime.Today.AddDays(-60);
         end ??= DateTime.Today;
-        var historicalData = await dataLoader.LoadHistoricalData(market, interval, 1440, start.Value, end.Value);
+        var historicalData = await DataLoader.LoadHistoricalData(market, interval, 1440, start.Value, end.Value);
         return historicalData;
     }
 

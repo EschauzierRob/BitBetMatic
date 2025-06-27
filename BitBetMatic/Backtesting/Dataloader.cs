@@ -6,24 +6,24 @@ using BitBetMatic.Repositories;
 
 public class DataLoader
 {
-    private readonly IApiWrapper _api;
-    private readonly CandleRepository _candleRepository;
+    private readonly IApiWrapper API;
+    private readonly ICandleRepository CandleRepository;
 
-    public DataLoader(IApiWrapper api, CandleRepository candleRepository)
+    public DataLoader(IApiWrapper api, ICandleRepository candleRepository)
     {
-        _api = api;
-        _candleRepository = candleRepository;
+        API = api;
+        CandleRepository = candleRepository;
     }
 
     public async Task<List<FlaggedQuote>> LoadHistoricalData(string market, string interval, int limit, DateTime start, DateTime end)
     {
 
-        var quotes = await _candleRepository.GetCandlesAsync(market, start, end);
+        var quotes = await CandleRepository.GetCandlesAsync(market, start, end);
 
         if (quotes.Count == 0)
         {
-            quotes = await _api.GetCandleData(market, interval, limit, start, end);
-            await _candleRepository.AddCandlesAsync(quotes);
+            quotes = await API.GetCandleData(market, interval, limit, start, end);
+            await CandleRepository.AddCandlesAsync(quotes);
         }
 
         return quotes;

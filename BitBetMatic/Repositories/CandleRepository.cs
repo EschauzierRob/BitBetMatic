@@ -7,7 +7,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BitBetMatic.Repositories
 {
-    public class CandleRepository
+
+    public interface ICandleRepository
+    {
+        Task<List<FlaggedQuote>> GetCandlesAsync(string market, DateTime start, DateTime end);
+        Task AddCandlesAsync(IEnumerable<FlaggedQuote> candles);
+
+    }
+    public class CandleRepository: ICandleRepository
     {
         public async Task<List<FlaggedQuote>> GetCandlesAsync(string market, DateTime start, DateTime end)
         {

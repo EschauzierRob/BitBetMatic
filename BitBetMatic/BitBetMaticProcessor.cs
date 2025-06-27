@@ -10,16 +10,16 @@ namespace BitBetMatic
 {
     public class BitBetMaticProcessor
     {
-        public BitBetMaticProcessor()
+        public BitBetMaticProcessor(IApiWrapper api, ICandleRepository candleRepository)
         {
-            api = new BitvavoApi();
-            candleRepository = new CandleRepository();
+            _api = api;
+            _candleRepository = candleRepository;
         }
 
         public const string BtcMarket = "BTC-EUR";
         public const string EthMarket = "ETH-EUR";
-        private BitvavoApi api;
-        private CandleRepository candleRepository;
+        private IApiWrapper _api;
+        private ICandleRepository _candleRepository;
         private PortfolioManager PortfolioManager;
         public async Task<string> RunStrategies(ITradingStrategy btcStrategy, ITradingStrategy ethStrategy, bool transact = true)
         {
@@ -29,7 +29,7 @@ namespace BitBetMatic
             sb.AppendLine($"\nTrading advice:\n");
 
             // var markets = GetMarkets(false);
-            var balances = await api.GetBalances();
+            var balances = await _api.GetBalances();
             await EnactStrategy(balances, transact, sb, new List<string> { BtcMarket }, btcStrategy);
             await EnactStrategy(balances, transact, sb, new List<string> { EthMarket }, ethStrategy);
 
@@ -48,15 +48,15 @@ namespace BitBetMatic
 
             foreach (var market in markets)
             {
-                var quotes = await candleRepository.GetCandlesAsync(market, DateTime.Now.AddDays(-15), DateTime.Now);
+                var quotes = await _candleRepository.GetCandlesAsync(market, DateTime.Now.AddDays(-15), DateTime.Now);
 
                 if (quotes.Count == 0)
                 {
-                    quotes = await api.GetCandleData(market, strategy.Interval(), strategy.Limit(), DateTime.Now.AddDays(-15), DateTime.Now);
-                    await candleRepository.AddCandlesAsync(quotes);
+                    quotes = await _api.GetCandleData(market, strategy.Interval(), strategy.Limit(), DateTime.Now.AddDays(-15), DateTime.Now);
+                    await _candleRepository.AddCandlesAsync(quotes);
                 }
 
-                var currentPrice = await api.GetPrice(market);
+                var currentPrice = await _api.GetPrice(market);
                 var analysis = strategy.AnalyzeMarket(market, quotes, currentPrice);
                 analyses.Add(market, analysis);
             }
@@ -71,7 +71,7 @@ namespace BitBetMatic
             {
                 var tokenBalance = balances.FirstOrDefault(x => x.symbol == Functions.GetSymbolFromMarket(analysis.market));
                 PortfolioManager.SetCash(euroBalance.available);
-                var price = await api.GetPrice(analysis.market);
+                var price = await _api.GetPrice(analysis.market);
                 PortfolioManager.SetTokenBalance(analysis.market, tokenBalance.available, price);
                 var outcome = strategy.CalculateOutcome(price, analysis.analysis.Score, analysis.analysis.Signal, PortfolioManager, analysis.market);
                 sb.AppendLine($" - {outcome.action}, at a score of {analysis.analysis.Score}");
@@ -85,7 +85,7 @@ namespace BitBetMatic
                 if (analysis.analysis.Signal == BuySellHold.Buy || analysis.analysis.Signal == BuySellHold.Sell)
                 {
                     // Update balances after each order
-                    balances = await api.GetBalances();
+                    balances = await _api.GetBalances();
                     euroBalance = balances.FirstOrDefault(x => x.symbol == "EUR");
                 }
             }
@@ -96,10 +96,10 @@ namespace BitBetMatic
             switch (outcome.signal)
             {
                 case BuySellHold.Buy:
-                    await api.Buy(outcome.market, outcome.amount);
+                    await _api.Buy(outcome.market, outcome.amount);
                     break;
                 case BuySellHold.Sell:
-                    await api.Sell(outcome.market, outcome.amount);
+                    await _api.Sell(outcome.market, outcome.amount);
                     break;
                 default: break;
             }
@@ -110,7 +110,7 @@ namespace BitBetMatic
             var markets = new List<string> { BtcMarket, EthMarket };
             if (top10)
             {
-                var marketsResult = api.GetMarkets().Result.OrderByDescending(x => x.Quote.Volume).Take(10);
+                var marketsResult = _api.GetMarkets().Result.OrderByDescending(x => x.Quote.Volume).Take(10);
                 markets = marketsResult.Select(x => $"{x.Base.Symbol}-EUR").ToList();
             }
 
@@ -132,7 +132,7 @@ namespace BitBetMatic
 
         public async Task<(ITradingStrategy strategyBtc, ITradingStrategy strategyEth, string result)> RunBacktesting(StringBuilder sb)
         {
-            BackTesting backTesting = new BackTesting(api, candleRepository);
+            BackTesting backTesting = new BackTesting(_api, _candleRepository);
             return await backTesting.RunBacktesting(sb);
         }
     }

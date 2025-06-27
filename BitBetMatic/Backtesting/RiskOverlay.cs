@@ -2,47 +2,47 @@ using System;
 
 public class RiskOverlay
 {
-    private decimal staticStopLossThreshold;
-    private decimal trailingStopLossPercentage;
-    private decimal highestPrice;
-    private decimal stopLossPrice;
-    private decimal entryPrice;
+    private decimal StaticStopLossThreshold;
+    private decimal TrailingStopLossPercentage;
+    private decimal HighestPrice;
+    private decimal StopLossPrice;
+    private decimal EntryPrice;
 
     public RiskOverlay(decimal staticStopLossThreshold, decimal trailingStopLossPercentage)
     {
-        this.staticStopLossThreshold = staticStopLossThreshold;
-        this.trailingStopLossPercentage = trailingStopLossPercentage;
-        highestPrice = 0;
-        stopLossPrice = 0;
-        entryPrice = 0;
+        StaticStopLossThreshold = staticStopLossThreshold;
+        TrailingStopLossPercentage = trailingStopLossPercentage;
+        HighestPrice = 0;
+        StopLossPrice = 0;
+        EntryPrice = 0;
     }
 
     public void UpdateEntryPrice(decimal currentPrice)
     {
-        entryPrice = currentPrice;
+        EntryPrice = currentPrice;
     }
 
     public void UpdatePrice(decimal currentPrice)
     {
-        if (entryPrice == 0)
+        if (EntryPrice == 0)
         {
-            entryPrice = currentPrice;
+            EntryPrice = currentPrice;
         }
 
         // Update highest price
-        if (currentPrice > highestPrice)
+        if (currentPrice > HighestPrice)
         {
-            highestPrice = currentPrice;
-            stopLossPrice = highestPrice * (1 - trailingStopLossPercentage / 100);
+            HighestPrice = currentPrice;
+            StopLossPrice = HighestPrice * (1 - TrailingStopLossPercentage / 100);
         }
 
         // Ensure stop-loss is never below the static threshold
-        decimal staticStopLossLevel = entryPrice * (1 - staticStopLossThreshold / 100);
-        stopLossPrice = Math.Max(stopLossPrice, staticStopLossLevel);
+        decimal staticStopLossLevel = EntryPrice * (1 - StaticStopLossThreshold / 100);
+        StopLossPrice = Math.Max(StopLossPrice, staticStopLossLevel);
     }
 
     public bool ShouldSell(decimal currentPrice)
     {
-        return currentPrice <= stopLossPrice;
+        return currentPrice <= StopLossPrice;
     }
 }

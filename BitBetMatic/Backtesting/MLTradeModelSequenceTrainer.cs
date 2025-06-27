@@ -35,11 +35,11 @@ public class MLTradeModelSequenceTrainer
 {
     private const int LookbackCount = 200;
     private const int FeatureCount = 5;
-    private MLContext mlContext;
+    private readonly MLContext MlContext;
 
     public MLTradeModelSequenceTrainer()
     {
-        mlContext = new MLContext(seed: 1);
+        MlContext = new MLContext(seed: 1);
     }
     public static CandleSequenceData CreateCandleSequenceDataFromQuotes(List<FlaggedQuote> quotes, IndicatorThresholds thresholds, uint? label)
     {
@@ -157,7 +157,7 @@ public class MLTradeModelSequenceTrainer
             data.Add(entry);
         }
 
-        return mlContext.Data.LoadFromEnumerable(data);
+        return MlContext.Data.LoadFromEnumerable(data);
     }
 
     // Hier nemen we een complete lijst met sequenties + labels uit je OptimalTradeFinder
@@ -173,27 +173,27 @@ public class MLTradeModelSequenceTrainer
     // }
     public IDataView CombineDatasets(IDataView first, IDataView second)
     {
-        var firstEnum = mlContext.Data.CreateEnumerable<CandleSequenceData>(first, reuseRowObject: false);
-        var secondEnum = mlContext.Data.CreateEnumerable<CandleSequenceData>(second, reuseRowObject: false);
+        var firstEnum = MlContext.Data.CreateEnumerable<CandleSequenceData>(first, reuseRowObject: false);
+        var secondEnum = MlContext.Data.CreateEnumerable<CandleSequenceData>(second, reuseRowObject: false);
 
         var combined = firstEnum.Concat(secondEnum);
 
-        return mlContext.Data.LoadFromEnumerable(combined);
+        return MlContext.Data.LoadFromEnumerable(combined);
     }
 
     private IDataView SplitData(IDataView dataView)
     {
         // ➤ Stap 1: splits per klasse
-        var buyData = mlContext.Data.FilterRowsByColumn(dataView, "Label", lowerBound: 1, upperBound: 1.1);
-        var sellData = mlContext.Data.FilterRowsByColumn(dataView, "Label", lowerBound: 2, upperBound: 2.1);
-        var holdData = mlContext.Data.FilterRowsByColumn(dataView, "Label", lowerBound: 3, upperBound: 3.1);
+        var buyData = MlContext.Data.FilterRowsByColumn(dataView, "Label", lowerBound: 1, upperBound: 1.1);
+        var sellData = MlContext.Data.FilterRowsByColumn(dataView, "Label", lowerBound: 2, upperBound: 2.1);
+        var holdData = MlContext.Data.FilterRowsByColumn(dataView, "Label", lowerBound: 3, upperBound: 3.1);
 
         // ➤ Stap 2: equalize / undersample Hold-klasse
         // Pas hier eventueel het aantal aan
-        var buyCount = mlContext.Data.CreateEnumerable<CandleSequenceData>(buyData, reuseRowObject: false).Count();
-        var sellCount = mlContext.Data.CreateEnumerable<CandleSequenceData>(sellData, reuseRowObject: false).Count();
+        var buyCount = MlContext.Data.CreateEnumerable<CandleSequenceData>(buyData, reuseRowObject: false).Count();
+        var sellCount = MlContext.Data.CreateEnumerable<CandleSequenceData>(sellData, reuseRowObject: false).Count();
         int minClassCount = Math.Min(buyCount, sellCount);
-        var holdSampled = mlContext.Data.TakeRows(holdData, minClassCount);
+        var holdSampled = MlContext.Data.TakeRows(holdData, minClassCount);
 
         // ➤ Stap 3: samenvoegen tot gebalanceerde set
 
@@ -204,14 +204,14 @@ public class MLTradeModelSequenceTrainer
 
     public void TrainModel(IDataView dataView, string modelPath)
     {
-        dataView = mlContext.Transforms.Conversion.ConvertType("Label", outputKind: DataKind.Double)
+        dataView = MlContext.Transforms.Conversion.ConvertType("Label", outputKind: DataKind.Double)
             .Fit(dataView)
             .Transform(dataView);
 
         // var balancedData = dataView;
         var balancedData = SplitData(dataView);
 
-        var split = mlContext.Data.TrainTestSplit(balancedData, testFraction: 0.2);
+        var split = MlContext.Data.TrainTestSplit(balancedData, testFraction: 0.2);
 
         var options = new LightGbmMulticlassTrainer.Options
         {
@@ -229,29 +229,29 @@ public class MLTradeModelSequenceTrainer
             EarlyStoppingRound = 50
         };
 
-        var pipeline = mlContext.Transforms.Conversion.MapValueToKey("Label")
-            .Append(mlContext.Transforms.NormalizeMinMax("Features"))
-            .Append(mlContext.MulticlassClassification.Trainers.LightGbm(options))
-            .Append(mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
+        var pipeline = MlContext.Transforms.Conversion.MapValueToKey("Label")
+            .Append(MlContext.Transforms.NormalizeMinMax("Features"))
+            .Append(MlContext.MulticlassClassification.Trainers.LightGbm(options))
+            .Append(MlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
 
         var model = pipeline.Fit(split.TrainSet);
 
         var predictions = model.Transform(split.TestSet);
-        var metrics = mlContext.MulticlassClassification.Evaluate(predictions, labelColumnName: "Label", predictedLabelColumnName: "PredictedLabel");
+        var metrics = MlContext.MulticlassClassification.Evaluate(predictions, labelColumnName: "Label", predictedLabelColumnName: "PredictedLabel");
 
         Console.WriteLine($"MacroAccuracy: {metrics.MacroAccuracy:F2}");
         Console.WriteLine($"MicroAccuracy: {metrics.MicroAccuracy:F2}");
         Console.WriteLine($"ConfusionMatrix: {metrics.ConfusionMatrix:F2}");
         printLabelSplit(split);
 
-        mlContext.Model.Save(model, dataView.Schema, modelPath);
+        MlContext.Model.Save(model, dataView.Schema, modelPath);
         Console.WriteLine($"Model saved to {modelPath}");
     }
 
     private void printLabelSplit(DataOperationsCatalog.TrainTestData split)
     {
         // Toon labelverdeling (histogram)
-        var labelDistribution = mlContext.Data.CreateEnumerable<CandleSequenceData>(split.TrainSet, reuseRowObject: false)
+        var labelDistribution = MlContext.Data.CreateEnumerable<CandleSequenceData>(split.TrainSet, reuseRowObject: false)
             .GroupBy(d => d.Label)
             .Select(g => new { Label = g.Key, Count = g.Count() })
             .OrderBy(x => x.Label);

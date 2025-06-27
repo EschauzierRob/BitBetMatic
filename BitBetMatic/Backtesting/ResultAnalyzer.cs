@@ -4,20 +4,20 @@ using System.Linq;
 using BitBetMatic;
 public class ResultAnalyzer
 {
-    private readonly ITradingStrategy tradingStrategy;
-    private readonly List<TradeAction> tradeActions;
-    private readonly PortfolioManager portfolioManager;
+    private readonly ITradingStrategy TradingStrategy;
+    private readonly List<TradeAction> TradeActions;
+    private readonly PortfolioManager PortfolioManager;
 
     public ResultAnalyzer(ITradingStrategy tradingStrategy, List<TradeAction> tradeActions, PortfolioManager portfolioManager)
     {
-        this.tradingStrategy = tradingStrategy;
-        this.tradeActions = tradeActions;
-        this.portfolioManager = portfolioManager;
+        TradingStrategy = tradingStrategy;
+        TradeActions = tradeActions;
+        PortfolioManager = portfolioManager;
     }
 
     private Metrics CalculateMetrics()
     {
-        if (tradeActions.Count == 0)
+        if (TradeActions.Count == 0)
         {
             return new Metrics
             {
@@ -32,7 +32,7 @@ public class ResultAnalyzer
         var portfolioManager = new PortfolioManager();
         portfolioManager.SetCash(300);
 
-        foreach (var item in tradeActions.Select((action, i) => new { i, action }))
+        foreach (var item in TradeActions.Select((action, i) => new { i, action }))
         {
             portfolioManager.ExecuteTrade(item.action);
             portfolioValues.Add(portfolioManager.GetAccountTotal());
@@ -78,9 +78,9 @@ public class ResultAnalyzer
         decimal totalSales = 0; // Total revenue from sells
         decimal heldQuantity = 0; // Total tokens held
         decimal heldValue = 0; // Current value of held tokens
-        decimal currentPrice = tradeActions.Last().CurrentTokenPrice; // Replace with your method
+        decimal currentPrice = TradeActions.Last().CurrentTokenPrice; // Replace with your method
 
-        foreach (var action in tradeActions)
+        foreach (var action in TradeActions)
         {
             var quantity = action.AmountInEuro / action.CurrentTokenPrice;
 
@@ -130,8 +130,8 @@ public class ResultAnalyzer
         decimal profitFactor = totalLoss != 0 ? totalProfit / totalLoss : 0;
 
         // Win/Loss Ratio
-        int wins = tradeActions.Count(t => t.Action == BuySellHold.Sell && t.AmountInEuro / t.CurrentTokenPrice > (totalCost / heldQuantity));
-        int losses = tradeActions.Count(t => t.Action == BuySellHold.Sell && t.AmountInEuro / t.CurrentTokenPrice <= (totalCost / heldQuantity));
+        int wins = TradeActions.Count(t => t.Action == BuySellHold.Sell && t.AmountInEuro / t.CurrentTokenPrice > (totalCost / heldQuantity));
+        int losses = TradeActions.Count(t => t.Action == BuySellHold.Sell && t.AmountInEuro / t.CurrentTokenPrice <= (totalCost / heldQuantity));
         decimal winLossRatio = losses > 0 ? (decimal)wins / losses : wins;
 
 
@@ -204,7 +204,7 @@ public class ResultAnalyzer
 
         var portfolioManager = new PortfolioManager();
         portfolioManager.SetCash(300);
-        var trades = tradeActions.Where(t => t.Action == BuySellHold.Buy || t.Action == BuySellHold.Sell).ToList();
+        var trades = TradeActions.Where(t => t.Action == BuySellHold.Buy || t.Action == BuySellHold.Sell).ToList();
 
         for (int i = 0; i < trades.Count - 1; i++)
         {
@@ -239,7 +239,7 @@ public class ResultAnalyzer
 
     public (string resultText, Metrics metrics, TradeQuality tradeQuality) Analyze()
     {
-        decimal totalPortfolioValue = portfolioManager.GetAccountTotal();
+        decimal totalPortfolioValue = PortfolioManager.GetAccountTotal();
 
         var metrics = CalculateMetrics();
         var tradeQuality = AnalyzeTradeQuality();
@@ -248,7 +248,7 @@ public class ResultAnalyzer
         // Console.WriteLine($"Average Delta on Correct Trades: {tradeQuality.AverageDelta:F2}%");
 
         return ($@"
-        Strategy: {tradingStrategy.GetType().Name}
+        Strategy: {TradingStrategy.GetType().Name}
         Total Portfolio Value: {totalPortfolioValue:F2} EUR
         Sharpe Ratio: {metrics.SharpeRatio:F2}
         Maximum Drawdown: {metrics.MaximumDrawdown:P2}

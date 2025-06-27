@@ -1,23 +1,21 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using BitBetMatic;
 using BitBetMatic.API;
-using Skender.Stock.Indicators;
 
 public class StrategyExecutor
 {
-    private readonly ITradingStrategy _strategy;
+    private readonly ITradingStrategy Strategy;
 
     public StrategyExecutor(ITradingStrategy strategy)
     {
-        _strategy = strategy;
+        Strategy = strategy;
     }
 
     public List<TradeAction> ExecuteStrategy(string market, List<FlaggedQuote> data, PortfolioManager portfolioManager)
     {
         var actions = new List<TradeAction>();
-        var size = _strategy.Limit();
+        var size = Strategy.Limit();
         data = data.OrderBy(x => x.Date).ToList();
 
         var buys = 0;
@@ -28,8 +26,8 @@ public class StrategyExecutor
         {
             var candle = data.Skip(i - size).Take(size).ToList();
             decimal currentPrice = candle.Last().Close;
-            var analysis = _strategy.AnalyzeMarket(market, candle, currentPrice);
-            var (amount, _) = _strategy.CalculateOutcome(currentPrice, analysis.Score, analysis.Signal, portfolioManager, market);
+            var analysis = Strategy.AnalyzeMarket(market, candle, currentPrice);
+            var (amount, _) = Strategy.CalculateOutcome(currentPrice, analysis.Score, analysis.Signal, portfolioManager, market);
 
             var tradeAction = new TradeAction
             {
@@ -46,7 +44,7 @@ public class StrategyExecutor
             else if (analysis.Signal == BuySellHold.Hold) holds++;
 
             //Special case: if we use the HoldStrategy, we only want to buy 100% into the token at the start, and then just hold forever :D
-            if (_strategy.GetType() == typeof(HoldStrategy) && portfolioManager.GetCashBalance() == 300)
+            if (Strategy.GetType() == typeof(HoldStrategy) && portfolioManager.GetCashBalance() == 300)
             {
                 tradeAction = new TradeAction
                 {

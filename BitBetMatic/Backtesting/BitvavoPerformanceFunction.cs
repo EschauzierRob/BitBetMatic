@@ -4,20 +4,18 @@ using System.Linq;
 using System.Threading.Tasks;
 using BitBetMatic.API;
 using BitBetMatic.Repositories;
-using Skender.Stock.Indicators;
-using Microsoft.Azure.Functions.Worker.Http;
 
 public class BitvavoPerformanceProcessor
 {
-    private readonly IApiWrapper api;
-    private readonly DataLoader dataLoader;
-    private readonly PortfolioManager portfolioManager;
+    private readonly IApiWrapper API;
+    private readonly DataLoader DataLoader;
+    private readonly PortfolioManager PortfolioManager;
 
-    public BitvavoPerformanceProcessor(IApiWrapper apiWrapper, CandleRepository candleRepository)
+    public BitvavoPerformanceProcessor(IApiWrapper apiWrapper, ICandleRepository candleRepository)
     {
-        api = apiWrapper;
-        dataLoader = new DataLoader(api, candleRepository);
-        portfolioManager = new PortfolioManager();
+        API = apiWrapper;
+        DataLoader = new DataLoader(API, candleRepository);
+        PortfolioManager = new PortfolioManager();
     }
 
     public string ProcessPerformance(string market)
@@ -28,7 +26,7 @@ public class BitvavoPerformanceProcessor
         var allTrades = tradeDataBTC.Item2;
         allTrades.AddRange(tradeDataETH.Item2);
 
-        portfolioManager.SetCash(300);
+        PortfolioManager.SetCash(300);
 
         var tokenQuotes = new List<(string market, ChartValues)> { ("BTC-EUR", tradeDataBTC.Item1), ("ETH-EUR", tradeDataETH.Item1) };
         var active = CalculateActivePortfolio(allTrades, tokenQuotes);
@@ -42,11 +40,11 @@ public class BitvavoPerformanceProcessor
     {
         // 1. Fetch portfolio and trade data
         // var portfolioData = await api.GetPortfolioData();
-        var tradeData = await api.GetTradeData(market);
+        var tradeData = await API.GetTradeData(market);
         // 2. Fetch BTC price history
 
         var startDate = tradeData.OrderBy(x => x.TimestampAsDateTime).First().TimestampAsDateTime;
-        var btcPriceData = await dataLoader.LoadHistoricalData(market, "1h", 200, startDate, DateTime.UtcNow);
+        var btcPriceData = await DataLoader.LoadHistoricalData(market, "1h", 200, startDate, DateTime.UtcNow);
 
         // 3. Calculate baseline and active portfolio values
         var baselineValues = CalculateBaseline(btcPriceData, 150);
@@ -85,7 +83,7 @@ public class BitvavoPerformanceProcessor
                 var tokenPrice = (tradeItem.Item2.Market=="BTC-EUR"? tokenQuotes[0]:tokenQuotes[1]).Item2.First(x => x.Time == time).TokenPrice;
                 var trade = tradeItem.Item2;
                 var tradeAction = new TradeAction { Action = trade.Side == "buy" ? BitBetMatic.BuySellHold.Buy : BitBetMatic.BuySellHold.Sell, CurrentTokenPrice = tokenPrice, AmountInEuro = tokenPrice * trade.Amount, Market = tradeItem.Item1, Timestamp = trade.TimestampAsDateTime };
-                portfolioManager.ExecuteTrade(tradeAction);
+                PortfolioManager.ExecuteTrade(tradeAction);
             }
 
             if (btcPrice > 100000m)
@@ -95,10 +93,10 @@ public class BitvavoPerformanceProcessor
 
             var graphPrice = 0m;
 
-            var btcBalance = portfolioManager.GetAssetTokenBalance("BTC-EUR");
-            var ethBalance = portfolioManager.GetAssetTokenBalance("ETH-EUR");
-            var cashBalance = portfolioManager.GetCashBalance();
-            var totalBalance = portfolioManager.GetAccountTotal();
+            var btcBalance = PortfolioManager.GetAssetTokenBalance("BTC-EUR");
+            var ethBalance = PortfolioManager.GetAssetTokenBalance("ETH-EUR");
+            var cashBalance = PortfolioManager.GetCashBalance();
+            var totalBalance = PortfolioManager.GetAccountTotal();
 
             activeValues.Add(new ChartValue(time, graphPrice, btcPrice, "BTC-EUR"));
             activeValues.Add(new ChartValue(time, graphPrice, ethPrice, "ETH-EUR"));

@@ -5,8 +5,8 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 using BitBetMatic.Repositories;
+using Newtonsoft.Json;
 using RestSharp;
 using Skender.Stock.Indicators;
 
@@ -84,76 +84,6 @@ namespace BitBetMatic.API
         }
 
         public async Task<List<FlaggedQuote>> GetCandleData(string market, string interval, int limit, DateTime start, DateTime end)
-        {
-            try
-            {
-                start = DateTime.SpecifyKind(start, DateTimeKind.Utc);
-                end = DateTime.SpecifyKind(end, DateTimeKind.Utc);
-
-                Console.WriteLine($"Fetching candle data from database for {market}: {start} - {end}...");
-
-                var existingQuotes = (await CandleRepository.GetCandlesAsync(market, start, end))
-                    .ToDictionary(x => x.Date.Ticks);
-
-                DateTime? earliestStoredCandle = existingQuotes.Count > 0 ? new DateTime(existingQuotes.Keys.Min()) : null;
-                DateTime? latestStoredCandle = existingQuotes.Count > 0 ? new DateTime(existingQuotes.Keys.Max()) : null;
-
-                var newQuotes = new List<FlaggedQuote>();
-
-                if (earliestStoredCandle == null || earliestStoredCandle > start)
-                {
-                    DateTime fetchStart = start;
-                    DateTime fetchEnd = earliestStoredCandle?.AddSeconds(-1) ?? end;
-
-                    var fromBitVavo = await FetchCandlesFromBitVavo(market, interval, limit, fetchStart, fetchEnd);
-                    existingQuotes = (await CandleRepository.GetCandlesAsync(market, start, end))
-                        .ToDictionary(x => x.Date.Ticks);
-                    var newNewQuotes = fromBitVavo.Where(x => !existingQuotes.ContainsKey(x.Date.Ticks)).ToList();
-
-                    newQuotes.AddRange(newNewQuotes);
-
-                    if (newNewQuotes.Count > 0)
-                        latestStoredCandle = newNewQuotes.Max(x => x.Date);
-                }
-
-                if (latestStoredCandle == null || latestStoredCandle < end)
-                {
-                    DateTime fetchStart = latestStoredCandle?.AddSeconds(1) ?? start;
-
-                    var fromBitVavo = await FetchCandlesFromBitVavo(market, interval, limit, fetchStart, end);
-                    existingQuotes = (await CandleRepository.GetCandlesAsync(market, start, end))
-                        .ToDictionary(x => x.Date.Ticks);
-
-                    var newNewQuotes = fromBitVavo.Where(x => !existingQuotes.ContainsKey(x.Date.Ticks)).ToList();
-
-                    newQuotes.AddRange(newNewQuotes);
-                }
-
-                if (newQuotes.Count > 0)
-                {
-                    await CandleRepository.AddCandlesAsync(newQuotes);
-                    Console.WriteLine($"Stored {newQuotes.Count} new candles in database.");
-                }
-                else
-                {
-                    Console.WriteLine("No new candles from BitVavo to store...");
-                }
-
-                foreach (var quote in newQuotes)
-                {
-                    existingQuotes[quote.Date.Ticks] = quote;
-                }
-
-                return existingQuotes.Values.OrderBy(q => q.Date).ToList();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error getting candle data for {market}: {ex.Message}");
-                throw;
-            }
-        }
-
-        private async Task<List<FlaggedQuote>> FetchCandlesFromBitVavo(string market, string interval, int limit, DateTime start, DateTime end)
         {
             var newQuotes = new List<FlaggedQuote>();
 
@@ -256,34 +186,27 @@ namespace BitBetMatic.API
             var formattedAmount = FormatAmount(amount, 2);
             if (amount % 1 == 0) { formattedAmount = amount.ToString("N0"); }
 
-            try
+            var url = "order";
+            var method = Method.Post;
+            var body = new
             {
-                var url = "order";
-                var method = Method.Post;
-                var body = new
-                {
-                    market,
-                    side,
-                    orderType = "market",
-                    amountQuote = formattedAmount
-                };
-                var request = new RestRequest(url, method);
-                request.AddJsonBody(body);
-                SetApiRequestHeaders(request, url, JsonConvert.SerializeObject(body));
-                var response = await Client.ExecuteAsync(request);
-                if (response.IsSuccessful)
-                {
-                    var orderResponse = JsonConvert.DeserializeObject<dynamic>(response.Content);
-                    return $"Order {side} placed successfully: {orderResponse.orderId}";
-                }
-                else
-                {
-                    throw new Exception($"Error placing order: {response.Content}");
-                }
+                market,
+                side,
+                orderType = "market",
+                amountQuote = formattedAmount
+            };
+            var request = new RestRequest(url, method);
+            request.AddJsonBody(body);
+            SetApiRequestHeaders(request, url, JsonConvert.SerializeObject(body));
+            var response = await Client.ExecuteAsync(request);
+            if (response.IsSuccessful)
+            {
+                var orderResponse = JsonConvert.DeserializeObject<dynamic>(response.Content);
+                return $"Order {side} placed successfully: {orderResponse.orderId}";
             }
-            catch (Exception ex)
+            else
             {
-                throw new Exception($"Error placing order: {ex.Message}");
+                throw new Exception($"Error placing order: {response.Content}");
             }
         }
 

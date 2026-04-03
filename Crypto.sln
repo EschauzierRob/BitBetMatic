@@ -5,6 +5,8 @@ VisualStudioVersion = 17.5.002.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BitBetMatic", "BitBetMatic\BitBetMaticFunctions.csproj", "{D6363BC6-74F0-4694-AE1D-AC469F7BF663}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BitBetMatic.Tests", "BitBetMatic.Tests\BitBetMatic.Tests.csproj", "{A5B3BB8E-0B12-4E41-B4AA-9B3E2DD204D3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,7 +17,11 @@ Global
 		{D6363BC6-74F0-4694-AE1D-AC469F7BF663}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D6363BC6-74F0-4694-AE1D-AC469F7BF663}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D6363BC6-74F0-4694-AE1D-AC469F7BF663}.Release|Any CPU.Build.0 = Release|Any CPU
-	EndGlobalSection
+		{A5B3BB8E-0B12-4E41-B4AA-9B3E2DD204D3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A5B3BB8E-0B12-4E41-B4AA-9B3E2DD204D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A5B3BB8E-0B12-4E41-B4AA-9B3E2DD204D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A5B3BB8E-0B12-4E41-B4AA-9B3E2DD204D3}.Release|Any CPU.Build.0 = Release|Any CPU
+EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection

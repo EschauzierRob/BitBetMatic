@@ -5,49 +5,61 @@ using Microsoft.EntityFrameworkCore;
 
 public class IndicatorThresholdPersistency
 {
+    private readonly IDbContextFactory<TradingDbContext> _dbContextFactory;
+
+    public IndicatorThresholdPersistency() : this(new PooledDbContextFactory<TradingDbContext>(
+        new DbContextOptionsBuilder<TradingDbContext>()
+            .UseSqlServer(TradingDbContext.GetRequiredConnectionString())
+            .Options))
+    {
+    }
+
+    public IndicatorThresholdPersistency(IDbContextFactory<TradingDbContext> dbContextFactory)
+    {
+        _dbContextFactory = dbContextFactory;
+    }
+
     public async Task InsertThresholdsAsync(IndicatorThresholds thresholds)
     {
         thresholds.Id = 0;
-        thresholds.CreatedAt = DateTime.Now;
+        thresholds.CreatedAt = DateTime.UtcNow;
         await SaveThresholdsAsync(thresholds);
     }
 
     public async Task SaveThresholdsAsync(IndicatorThresholds thresholds)
     {
-        using (var context = new TradingDbContext())
-        {
-            Console.WriteLine($"Saving new thresholds for {thresholds.Strategy} with a score of {thresholds.Highscore}");
-            context.IndicatorThresholds.Add(thresholds);
-            await context.SaveChangesAsync();
-        }
+        await using var context = await _dbContextFactory.CreateDbContextAsync();
+
+        Console.WriteLine($"Saving new thresholds for {thresholds.Strategy} with a score of {thresholds.Highscore}");
+        context.IndicatorThresholds.Add(thresholds);
+        await context.SaveChangesAsync();
     }
 
     public async Task<IndicatorThresholds> GetLatestThresholdsAsync(string strategy, string market)
     {
-        using (var context = new TradingDbContext())
-        {
-            return await context.IndicatorThresholds
-                .Where(t => t.Strategy == strategy && t.Market == market)
-                .OrderByDescending(t => t.CreatedAt)
-                .FirstOrDefaultAsync();
-        }
+        await using var context = await _dbContextFactory.CreateDbContextAsync();
+
+        return await context.IndicatorThresholds
+            .Where(t => t.Strategy == strategy && t.Market == market)
+            .OrderByDescending(t => t.CreatedAt)
+            .FirstOrDefaultAsync();
     }
+
     public async Task<IndicatorThresholds> GetLatestDecayedThresholdsAsync(string strategy, string market, double decayRate)
     {
-        using (var context = new TradingDbContext())
+        var bestThresholds = await GetLatestThresholdsAsync(strategy, market);
+
+        if (bestThresholds == null)
         {
-            // Calculate DecayScore based on the age of the thresholds and Highscore
-            var bestThresholds = await GetLatestThresholdsAsync(strategy, market);
-
-            if (bestThresholds == null) return null;
-
-            Console.WriteLine($"Raw highscore for {strategy} {market}: {bestThresholds?.Highscore ?? 0}");
-
-            bestThresholds.Highscore = bestThresholds.Highscore * (decimal)Math.Exp(-decayRate * (DateTime.Now - bestThresholds.CreatedAt).TotalDays); // Decay score calculation
-
-            Console.WriteLine($"Decayed highscore for {strategy} {market}: {bestThresholds.Highscore}");
-
-            return bestThresholds; // Return the best thresholds
+            return null;
         }
+
+        Console.WriteLine($"Raw highscore for {strategy} {market}: {bestThresholds.Highscore}");
+
+        bestThresholds.Highscore *= (decimal)Math.Exp(-decayRate * (DateTime.UtcNow - bestThresholds.CreatedAt).TotalDays);
+
+        Console.WriteLine($"Decayed highscore for {strategy} {market}: {bestThresholds.Highscore}");
+
+        return bestThresholds;
     }
 }

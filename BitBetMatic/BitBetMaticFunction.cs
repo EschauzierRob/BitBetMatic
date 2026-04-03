@@ -9,7 +9,6 @@ using BitBetMatic.API;
 using BitBetMatic.Repositories;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skender.Stock.Indicators;
 
@@ -31,11 +30,6 @@ namespace BitBetMatic
         public async Task<HttpResponseData> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequestData req, FunctionContext funcContext)
         {
-            using (var context = new TradingDbContext())
-            {
-                context.Database.Migrate();
-            }
-
             // var _logger = funcContext.GetLogger();
 
             // Console.WriteLine("C# HTTP trigger function processed a request.");
@@ -66,11 +60,6 @@ namespace BitBetMatic
         [Function("BitBetMaticBackTesting")]
         public async Task RunAsync([TimerTrigger("0 */15 * * * *")] TimerInfo timer)
         {
-            using (var context = new TradingDbContext())
-            {
-                context.Database.Migrate();
-            }
-
             Console.WriteLine("C# HTTP trigger function processed a request.");
             await new BitBetMaticBackTestingOnDemand(CandleRepository).BackTestVariants();
             // await FindPatterns();
@@ -88,11 +77,6 @@ namespace BitBetMatic
         [Function("BitBetMaticBackTestingOnDemand")]
         public async Task<HttpResponseData> Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequestData req)
         {
-            using (var context = new TradingDbContext())
-            {
-                context.Database.Migrate();
-            }
-
             Console.WriteLine("C# HTTP trigger function processed a request.");
             await BackTestVariants();
             // await FindPatterns();
@@ -224,14 +208,9 @@ namespace BitBetMatic
         [Function("BitBetMaticFunction")]
         public async Task RunAsync([TimerTrigger("0 */15 * * * *")] TimerInfo timer)
         {
-            using (var context = new TradingDbContext())
-            {
-                context.Database.Migrate();
-            }
-
             Console.WriteLine($"C# Timer trigger function executed at: {DateTime.Now}");
             var sb = new StringBuilder();
-            BitBetMaticProcessor bitBetMaticProcessor = new BitBetMaticProcessor(new BitvavoApi(CandleRepository), new CandleRepository());
+            BitBetMaticProcessor bitBetMaticProcessor = new BitBetMaticProcessor(new BitvavoApi(CandleRepository), CandleRepository);
             var backtestResult = await bitBetMaticProcessor.RunBacktesting(sb);
 
             Console.WriteLine($"backtestResult: btcStrategy: {backtestResult.strategyBtc.GetType()}, ethStrategy: {backtestResult.strategyEth.GetType()}");

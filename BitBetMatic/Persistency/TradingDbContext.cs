@@ -4,18 +4,28 @@ using Microsoft.EntityFrameworkCore;
 
 public class TradingDbContext : DbContext
 {
+    public const string ConnectionStringEnvironmentVariable = "DB_CONNECTION_STRING";
+
+    public TradingDbContext(DbContextOptions<TradingDbContext> options) : base(options)
+    {
+    }
+
+    // Parameterless constructor is kept for existing call sites and EF design-time tooling.
+    public TradingDbContext()
+    {
+    }
+
     public DbSet<IndicatorThresholds> IndicatorThresholds { get; set; }
     public DbSet<FlaggedQuote> Candles { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        var connectionString = "Server=tcp:bitbetmatic-db.database.windows.net,1433;Initial Catalog=bitbetmatic-db;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=\"Active Directory Default\";";
-        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DB_CONNECTION_STRING")))
+        if (optionsBuilder.IsConfigured)
         {
-            throw new InvalidOperationException("Database connection string is not set.");
+            return;
         }
-        
-        // Verbind met Azure SQL Database
+
+        var connectionString = GetRequiredConnectionString();
         optionsBuilder.UseSqlServer(connectionString);
     }
 
@@ -23,8 +33,20 @@ public class TradingDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // Indexen voor betere query-prestaties
         modelBuilder.Entity<IndicatorThresholds>()
             .HasIndex(e => new { e.Strategy, e.Market, e.CreatedAt });
+
+    }
+
+    public static string GetRequiredConnectionString()
+    {
+        var connectionString = Environment.GetEnvironmentVariable(ConnectionStringEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                $"Database connection string is not set. Configure environment variable '{ConnectionStringEnvironmentVariable}'.");
+        }
+
+        return connectionString;
     }
 }
